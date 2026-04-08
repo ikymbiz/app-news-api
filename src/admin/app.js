@@ -10,6 +10,8 @@
 
 const STORAGE_KEY = "agent-admin-config";
 
+const SOURCES_KEY = "agent-admin-sources";
+
 const state = {
   distributorUrl: "",
   app: "news",
@@ -17,6 +19,7 @@ const state = {
   stages: [],
   metrics: [],
   artifacts: [],
+  sources: [],
 };
 
 // --------------------------------------------------------------------------- //
@@ -25,12 +28,15 @@ const state = {
 
 document.addEventListener("DOMContentLoaded", () => {
   restoreConfig();
+  restoreSources();
   bindNav();
   bindConfigInputs();
+  bindSourcesUI();
   document.getElementById("refresh").addEventListener("click", refreshAll);
   if (state.distributorUrl) {
     refreshAll();
   }
+  renderSources();
 });
 
 function restoreConfig() {
@@ -272,4 +278,229 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
+}
+
+// --------------------------------------------------------------------------- //
+// Sources management
+// --------------------------------------------------------------------------- //
+
+const CATEGORIES = ["policy", "lab", "papers", "risk", "business", "newsletter", "japan"];
+const VIA_OPTIONS = ["rss", "google_news_proxy"];
+
+function restoreSources() {
+  try {
+    const raw = window.localStorage?.getItem(SOURCES_KEY);
+    if (!raw) return;
+    state.sources = JSON.parse(raw);
+  } catch (_e) {
+    /* ignore */
+  }
+}
+
+function saveSources() {
+  try {
+    window.localStorage?.setItem(SOURCES_KEY, JSON.stringify(state.sources));
+  } catch (_e) {
+    /* ignore */
+  }
+}
+
+function bindSourcesUI() {
+  document.getElementById("sources-import").addEventListener("click", () => {
+    document.getElementById("sources-file-input").click();
+  });
+  document.getElementById("sources-file-input").addEventListener("change", handleSourcesImport);
+  document.getElementById("sources-export").addEventListener("click", handleSourcesExport);
+  document.getElementById("sources-add").addEventListener("click", handleSourcesAdd);
+  document.getElementById("sources-filter-category").addEventListener("change", renderSources);
+}
+
+function handleSourcesImport(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const sources = data.sources || data;
+      if (!Array.isArray(sources)) {
+        alert("Invalid format: expected { sources: [...] } or [...]");
+        return;
+      }
+      state.sources = sources;
+      saveSources();
+      renderSources();
+    } catch (err) {
+      alert("JSON parse error: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+}
+
+function handleSourcesExport() {
+  if (!state.sources.length) {
+    alert("No sources to export.");
+    return;
+  }
+  const data = {
+    "$schema_version": "2.0",
+    description: "AI OSINT source catalog — exported from Admin UI",
+    sources: state.sources,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sources.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function handleSourcesAdd() {
+  const newSource = {
+    id: "new-source-" + Date.now(),
+    name: "",
+    category: "policy",
+    feed_url: "",
+    language: "en",
+    enabled: true,
+  };
+  state.sources.push(newSource);
+  saveSources();
+  renderSources();
+  // Scroll to the new row
+  const tbody = document.querySelector("#sources-table tbody");
+  if (tbody.lastElementChild) {
+    tbody.lastElementChild.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function handleSourceDelete(index) {
+  const src = state.sources[index];
+  if (!confirm(`Delete source "${src.name || src.id}"?`)) return;
+  state.sources.splice(index, 1);
+  saveSources();
+  renderSources();
+}
+
+function handleSourceChange(index, field, value) {
+  if (field === "enabled") {
+    state.sources[index].enabled = value;
+  } else {
+    state.sources[index][field] = value;
+  }
+  // Update via field: set or remove based on whether it looks like a google news proxy
+  if (field === "feed_url") {
+    if (value.includes("news.google.com/rss/search")) {
+      state.sources[index].via = "google_news_proxy";
+    } else if (state.sources[index].via === "google_news_proxy") {
+      delete state.sources[index].via;
+    }
+  }
+  saveSources();
+}
+
+function renderSources() {
+  const tbody = document.querySelector("#sources-table tbody");
+  tbody.innerHTML = "";
+  const catFilter = document.getElementById("sources-filter-category").value;
+
+  const filtered = state.sources
+    .map((s, i) => ({ ...s, _index: i }))
+    .filter((s) => !catFilter || s.category === catFilter);
+
+  for (const src of filtered) {
+    const idx = src._index;
+    const tr = document.createElement("tr");
+    if (!src.enabled) tr.className = "source-disabled";
+
+    // Enabled checkbox
+    const tdEnabled = document.createElement("td");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = src.enabled !== false;
+    checkbox.addEventListener("change", () => {
+      handleSourceChange(idx, "enabled", checkbox.checked);
+      tr.className = checkbox.checked ? "" : "source-disabled";
+    });
+    tdEnabled.appendChild(checkbox);
+    tr.appendChild(tdEnabled);
+
+    // ID
+    const tdId = document.createElement("td");
+    const inputId = document.createElement("input");
+    inputId.type = "text";
+    inputId.value = src.id || "";
+    inputId.addEventListener("change", () => handleSourceChange(idx, "id", inputId.value.trim()));
+    tdId.appendChild(inputId);
+    tr.appendChild(tdId);
+
+    // Name
+    const tdName = document.createElement("td");
+    const inputName = document.createElement("input");
+    inputName.type = "text";
+    inputName.value = src.name || "";
+    inputName.addEventListener("change", () => handleSourceChange(idx, "name", inputName.value.trim()));
+    tdName.appendChild(inputName);
+    tr.appendChild(tdName);
+
+    // Category
+    const tdCat = document.createElement("td");
+    const selectCat = document.createElement("select");
+    for (const cat of CATEGORIES) {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = cat;
+      if (cat === src.category) opt.selected = true;
+      selectCat.appendChild(opt);
+    }
+    selectCat.addEventListener("change", () => handleSourceChange(idx, "category", selectCat.value));
+    tdCat.appendChild(selectCat);
+    tr.appendChild(tdCat);
+
+    // Feed URL
+    const tdUrl = document.createElement("td");
+    tdUrl.className = "feed-url-cell";
+    const inputUrl = document.createElement("input");
+    inputUrl.type = "url";
+    inputUrl.value = src.feed_url || "";
+    inputUrl.placeholder = "https://example.com/rss.xml";
+    inputUrl.addEventListener("change", () => handleSourceChange(idx, "feed_url", inputUrl.value.trim()));
+    tdUrl.appendChild(inputUrl);
+    tr.appendChild(tdUrl);
+
+    // Via
+    const tdVia = document.createElement("td");
+    tdVia.innerHTML = `<code>${escapeHtml(src.via || "rss")}</code>`;
+    tr.appendChild(tdVia);
+
+    // Language
+    const tdLang = document.createElement("td");
+    const selectLang = document.createElement("select");
+    for (const lang of ["en", "ja"]) {
+      const opt = document.createElement("option");
+      opt.value = lang;
+      opt.textContent = lang;
+      if (lang === src.language) opt.selected = true;
+      selectLang.appendChild(opt);
+    }
+    selectLang.addEventListener("change", () => handleSourceChange(idx, "language", selectLang.value));
+    tdLang.appendChild(selectLang);
+    tr.appendChild(tdLang);
+
+    // Actions
+    const tdActions = document.createElement("td");
+    tdActions.className = "actions-cell";
+    const btnDelete = document.createElement("button");
+    btnDelete.className = "btn-danger";
+    btnDelete.textContent = "Delete";
+    btnDelete.addEventListener("click", () => handleSourceDelete(idx));
+    tdActions.appendChild(btnDelete);
+    tr.appendChild(tdActions);
+
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById("sources-empty").style.display = filtered.length ? "none" : "block";
 }

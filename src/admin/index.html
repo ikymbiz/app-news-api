@@ -14,6 +14,7 @@
       <button data-view="stages" class="nav">Stages</button>
       <button data-view="cost" class="nav">Cost</button>
       <button data-view="artifacts" class="nav">Artifacts</button>
+      <button data-view="sources" class="nav">Sources</button>
     </nav>
     <div class="config">
       <label>Distributor URL
@@ -86,6 +87,40 @@
         </tr></thead>
         <tbody></tbody>
       </table>
+    </section>
+
+    <section id="view-sources" class="view">
+      <h2>RSS Sources</h2>
+      <div class="sources-toolbar">
+        <div class="sources-actions">
+          <button id="sources-import" class="btn-secondary">Import JSON</button>
+          <button id="sources-export" class="btn-secondary">Export JSON</button>
+          <button id="sources-add" class="btn-primary">+ Add Source</button>
+        </div>
+        <div class="sources-filters">
+          <label>Category
+            <select id="sources-filter-category">
+              <option value="">(all)</option>
+              <option value="policy">policy</option>
+              <option value="lab">lab</option>
+              <option value="papers">papers</option>
+              <option value="risk">risk</option>
+              <option value="business">business</option>
+              <option value="newsletter">newsletter</option>
+              <option value="japan">japan</option>
+            </select>
+          </label>
+        </div>
+        <input type="file" id="sources-file-input" accept=".json" hidden />
+      </div>
+      <table id="sources-table">
+        <thead><tr>
+          <th>enabled</th><th>id</th><th>name</th><th>category</th>
+          <th>feed_url</th><th>via</th><th>lang</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" id="sources-empty">Import a sources.json file or add sources manually.</p>
     </section>
   </main>
 
