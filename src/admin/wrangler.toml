@@ -1,0 +1,10 @@
+name = "agent-platform-admin"
+compatibility_date = "2024-09-01"
+
+# Workers Static Assets configuration.
+# This deploys the SPA as a Cloudflare Worker that serves static files,
+# replacing the older `wrangler pages deploy` flow which is being phased out
+# in favor of Workers + Static Assets in new Cloudflare accounts.
+[assets]
+directory = "."
+not_found_handling = "single-page-application"

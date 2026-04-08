@@ -167,12 +167,29 @@ jobs:
       - name: Install wrangler
         run: npm install -g wrangler@3
 
-      - name: Deploy Admin SPA to Cloudflare Pages
+      - name: Deploy Admin SPA as Workers Static Assets
+        working-directory: src/admin
         run: |
           set -euo pipefail
-          # `wrangler pages deploy` creates the project on first run if it does
-          # not yet exist. --branch main marks this as the production deployment.
-          wrangler pages deploy src/admin \
-            --project-name "${PAGES_PROJECT}" \
-            --branch main \
-            --commit-dirty=true
+          # Cloudflare merged Pages into Workers + Static Assets in 2024.
+          # The Admin SPA now ships as a Worker named `agent-platform-admin`
+          # whose only purpose is to serve the static HTML/JS/CSS files in
+          # this directory. The wrangler.toml in src/admin declares the
+          # [assets] binding pointing at "." (current directory).
+          wrangler deploy
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "## Admin SPA deployed"
+            echo ""
+            echo "The Admin SPA is now live at:"
+            echo ""
+            echo "  https://agent-platform-admin.<your-subdomain>.workers.dev"
+            echo ""
+            echo "Open the URL, then in the SPA header:"
+            echo "  - Distributor URL: paste the agent-platform-distributor URL from the worker job"
+            echo "  - GitHub Repo: paste \`${{ github.repository }}\`"
+            echo "  - Click Refresh"
+          } >> "$GITHUB_STEP_SUMMARY"
