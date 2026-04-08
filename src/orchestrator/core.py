@@ -70,11 +70,53 @@ class WhenExpressionError(ValueError):
     pass
 
 
+class _Missing:
+    """Sentinel returned by the when-expression evaluator when a name or
+    attribute is absent from the scope. It is falsy and compares as False
+    against any other value, so an upstream stage that produced an empty
+    payload will simply make `when:` clauses evaluate to False (skipping
+    the dependent stage) instead of crashing the entire pipeline."""
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __lt__(self, other): return False
+    def __le__(self, other): return False
+    def __gt__(self, other): return False
+    def __ge__(self, other): return False
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, _Missing)
+
+    def __ne__(self, other) -> bool:
+        return not isinstance(other, _Missing)
+
+    def __hash__(self) -> int:
+        return id(_Missing)
+
+    def __repr__(self) -> str:
+        return "<missing>"
+
+
+_MISSING = _Missing()
+
+
 def evaluate_when(expr: str, scope: Mapping[str, Any]) -> bool:
     """`filter.score >= 9.0` のような式を安全に評価する。
 
     許可: 比較演算、論理演算、算術演算、属性参照(dot-path)、リテラル、リスト、タプル。
     禁止: 関数呼び出し、lambda、import、属性代入、名前空間汚染。
+
+    Robustness: 上流ステージの payload が空で参照キーが存在しない場合、例外を
+    投げず `_MISSING` センチネルを返す。`_MISSING` はあらゆる比較演算で False を
+    返し、bool() で False になるため、依存ステージは自動的に SKIP される。
     """
     try:
         tree = ast.parse(expr, mode="eval")
@@ -88,19 +130,26 @@ def evaluate_when(expr: str, scope: Mapping[str, Any]) -> bool:
             return node.value
         if isinstance(node, ast.Name):
             if node.id not in scope:
-                raise WhenExpressionError(f"Unknown name in when: {node.id}")
+                return _MISSING
             return scope[node.id]
         if isinstance(node, ast.Attribute):
             target = _eval(node.value)
+            if isinstance(target, _Missing):
+                return _MISSING
             if isinstance(target, Mapping):
                 if node.attr not in target:
-                    raise WhenExpressionError(f"Missing key: {node.attr}")
+                    return _MISSING
                 return target[node.attr]
-            return getattr(target, node.attr)
+            return getattr(target, node.attr, _MISSING)
         if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_BINOPS:
-            return _ALLOWED_BINOPS[type(node.op)](_eval(node.left), _eval(node.right))
+            try:
+                return _ALLOWED_BINOPS[type(node.op)](_eval(node.left), _eval(node.right))
+            except TypeError:
+                return _MISSING
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.Not)):
             v = _eval(node.operand)
+            if isinstance(v, _Missing):
+                return _MISSING if isinstance(node.op, ast.USub) else True
             return -v if isinstance(node.op, ast.USub) else (not v)
         if isinstance(node, ast.BoolOp) and type(node.op) in _ALLOWED_BOOLOPS:
             return _ALLOWED_BOOLOPS[type(node.op)](_eval(v) for v in node.values)
@@ -110,7 +159,10 @@ def evaluate_when(expr: str, scope: Mapping[str, Any]) -> bool:
                 if type(cmp_op) not in _ALLOWED_CMPOPS:
                     raise WhenExpressionError(f"Operator not allowed: {cmp_op}")
                 right = _eval(comparator)
-                if not _ALLOWED_CMPOPS[type(cmp_op)](left, right):
+                try:
+                    if not _ALLOWED_CMPOPS[type(cmp_op)](left, right):
+                        return False
+                except TypeError:
                     return False
                 left = right
             return True
@@ -427,8 +479,10 @@ class DagExecutor:
         )
 
         # Preserve aggregate keys (e.g. "score" set by llm_score) by computing
-        # a max across successful element payloads when present.
-        aggregate: dict[str, Any] = {fan_key: merged_items}
+        # a max across successful element payloads when present. Always emit a
+        # default `score=0.0` so downstream `when:` clauses can safely reference
+        # `<this_stage>.score` even when no elements survived.
+        aggregate: dict[str, Any] = {fan_key: merged_items, "score": 0.0}
         if merged_items and all(isinstance(i, dict) and "score" in i for i in merged_items):
             aggregate["score"] = max(float(i["score"]) for i in merged_items)
 

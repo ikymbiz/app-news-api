@@ -26,13 +26,16 @@ jobs:
     env:
       PYTHONPATH: src
       AGENT_MAX_WORKERS: "4"
+      # --- Required runtime secrets (Settings → Secrets → Actions) ---
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_R2_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}  # alias for r2_upload
       CLOUDFLARE_R2_KEY: ${{ secrets.CLOUDFLARE_R2_KEY }}
       CLOUDFLARE_R2_SECRET: ${{ secrets.CLOUDFLARE_R2_SECRET }}
+      # --- Optional secret: omit if you don't need Firestore-backed observability ---
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      # --- Personal config (Settings → Variables → Actions, NOT a secret) ---
       AGENT_USER_CONTEXT: ${{ vars.AGENT_USER_CONTEXT }}
 
     steps:

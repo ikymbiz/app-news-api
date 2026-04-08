@@ -69,9 +69,17 @@ class TestEvaluateWhen:
         assert evaluate_when("a > 1 and b < 5", {"a": 2, "b": 3}) is True
         assert evaluate_when("a > 1 and b < 5", {"a": 0, "b": 3}) is False
 
-    def test_unknown_name_raises(self):
-        with pytest.raises(WhenExpressionError):
-            evaluate_when("unknown.field >= 1", {})
+    def test_unknown_name_evaluates_false(self):
+        """After Phase 11, missing names return _MISSING instead of raising,
+        so the whole expression evaluates to False (the dependent stage is
+        skipped). This makes pipelines robust against upstream stages that
+        produced empty payloads."""
+        assert evaluate_when("unknown.field >= 1", {}) is False
+
+    def test_missing_attr_evaluates_false(self):
+        """A reference to a key that doesn't exist on a present mapping
+        evaluates to False rather than raising."""
+        assert evaluate_when("filter.score >= 9.0", {"filter": {"items": []}}) is False
 
     def test_function_call_disallowed(self):
         with pytest.raises(WhenExpressionError):
@@ -163,3 +171,70 @@ class TestPipelineExecution:
         assert "score" in filter_out.payload, "fan_out must produce aggregate score"
         assert filter_out.payload["score"] == 9.5
         assert len(filter_out.payload["items"]) == 2  # both items survive filter (research narrows)
+
+    def test_empty_collector_does_not_crash(self, repo_root, tmp_path, monkeypatch):
+        """Phase 11 regression: when the collector returns zero items, the
+        fan_out filter must still emit a default `score=0.0` so the research
+        stage's `when: filter.score >= 9.0` evaluates to False (skipping
+        research) instead of raising WhenExpressionError."""
+        from agent.contracts import StageOutput, StageStatus, StageMetrics
+
+        class EmptyCollector:
+            name = "stages.collectors.rss"
+            def run(self, ctx, inputs):
+                return StageOutput(
+                    status=StageStatus.SUCCESS,
+                    payload={"items": []},
+                    metrics=StageMetrics(),
+                )
+
+        class PassThroughLLM:
+            name = "stages.filters.llm_score"
+            def run(self, ctx, inputs):
+                return StageOutput(
+                    status=StageStatus.SUCCESS,
+                    payload={"items": []},
+                    metrics=StageMetrics(),
+                )
+
+        class NoopResearch:
+            name = "stages.researchers.deep_research"
+            def run(self, ctx, inputs):
+                return StageOutput(
+                    status=StageStatus.SUCCESS,
+                    payload={"items": []},
+                    metrics=StageMetrics(),
+                )
+
+        # Save and override registry
+        saved = dict(default_registry._overrides)
+        saved_cache = dict(default_registry._cache)
+        default_registry._overrides.clear()
+        default_registry._cache.clear()
+        default_registry.register("stages.collectors.rss", lambda: EmptyCollector())
+        default_registry.register("stages.filters.llm_score", lambda: PassThroughLLM())
+        default_registry.register("stages.researchers.deep_research", lambda: NoopResearch())
+
+        try:
+            monkeypatch.chdir(tmp_path)
+            pipe = load_pipeline(yaml.safe_load((repo_root / "src/apps/news/pipeline.yml").read_text()))
+            executor = DagExecutor(
+                registry=default_registry,
+                max_workers=2,
+                context_factory=_make_factory(tmp_path),
+            )
+            # Must not raise
+            result = executor.run(pipe, job_run_id="test-empty")
+
+            # Pipeline as a whole succeeds
+            assert not result.failed, f"empty pipeline must not fail: {result.outputs}"
+            # Research is skipped because filter.score=0.0 < 9.0
+            assert result.outputs["research"].status == StageStatus.SKIPPED
+            # Reporters still run with empty input
+            assert result.outputs["report_markdown"].status == StageStatus.SUCCESS
+            assert result.outputs["report_json"].status == StageStatus.SUCCESS
+        finally:
+            default_registry._overrides.clear()
+            default_registry._overrides.update(saved)
+            default_registry._cache.clear()
+            default_registry._cache.update(saved_cache)
