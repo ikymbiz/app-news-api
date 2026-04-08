@@ -9,6 +9,7 @@
 // 機密値(APIキー)は一切 HTML/JS に埋め込まない。
 
 const STORAGE_KEY = "agent-admin-config";
+const PAT_STORAGE_KEY = "agent-admin-github-pat";
 
 const state = {
   distributorUrl: "",
@@ -22,6 +23,9 @@ const state = {
   rawPipeline: "",
   rawPrompt: "",
   rawJobs: "",
+  rawRuntime: "",
+  runtime: null,
+  runtimeSha: null,
 };
 
 // --------------------------------------------------------------------------- //
@@ -33,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindNav();
   bindConfigInputs();
   bindSettingsFilters();
+  bindRuntimeForm();
   document.getElementById("refresh").addEventListener("click", refreshAll);
   if (state.distributorUrl || state.githubRepo) {
     refreshAll();
@@ -102,6 +107,124 @@ function bindConfigInputs() {
 function bindSettingsFilters() {
   document.getElementById("src-category-filter").addEventListener("change", renderSources);
   document.getElementById("src-status-filter").addEventListener("change", renderSources);
+}
+
+function bindRuntimeForm() {
+  // Restore PAT (separate key, not bundled with config).
+  try {
+    const pat = window.localStorage?.getItem(PAT_STORAGE_KEY) || "";
+    document.getElementById("rt-github-pat").value = pat;
+  } catch (_e) { /* ignore */ }
+
+  document.getElementById("rt-github-pat").addEventListener("change", (e) => {
+    try {
+      window.localStorage?.setItem(PAT_STORAGE_KEY, e.target.value.trim());
+    } catch (_e) { /* ignore */ }
+  });
+  document.getElementById("rt-save-btn").addEventListener("click", saveRuntime);
+  document.getElementById("rt-reload-btn").addEventListener("click", () => {
+    state.runtimeSha = null;
+    loadSettings().then(() => renderRawFiles()).catch((e) => setRuntimeStatus("reload失敗: " + e.message, "err"));
+  });
+}
+
+function populateRuntimeForm() {
+  const rt = state.runtime || {};
+  const collect = rt.collect || {};
+  const report = rt.report || {};
+  const days = collect.max_age_days;
+  const drop = !!collect.drop_undated;
+  const thr = report.high_value_threshold;
+  document.getElementById("rt-max-age-days").value = days != null ? days : "";
+  document.getElementById("rt-drop-undated").checked = drop;
+  document.getElementById("rt-high-threshold").value = thr != null ? thr : "";
+}
+
+function setRuntimeStatus(msg, kind) {
+  const el = document.getElementById("rt-status");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "rt-status " + (kind || "");
+}
+
+async function saveRuntime() {
+  const repo = state.githubRepo;
+  if (!repo) {
+    setRuntimeStatus("GitHub Repo を先に入力してください", "err");
+    return;
+  }
+  const pat = (document.getElementById("rt-github-pat").value || "").trim();
+  if (!pat) {
+    setRuntimeStatus("GitHub PAT が必要です", "err");
+    return;
+  }
+
+  const days = parseInt(document.getElementById("rt-max-age-days").value, 10);
+  const drop = document.getElementById("rt-drop-undated").checked;
+  const thr = parseFloat(document.getElementById("rt-high-threshold").value);
+  if (Number.isNaN(days) || days < 0) {
+    setRuntimeStatus("取得期間は 0 以上の整数で", "err");
+    return;
+  }
+  if (Number.isNaN(thr) || thr < 0 || thr > 10) {
+    setRuntimeStatus("閾値は 0〜10 の数値で", "err");
+    return;
+  }
+
+  const next = {
+    _comment: "Edited from Admin SPA. Picked up by next agent-platform run.",
+    collect: { max_age_days: days, drop_undated: drop },
+    report: { high_value_threshold: thr },
+  };
+  const nextText = JSON.stringify(next, null, 2) + "\n";
+
+  setRuntimeStatus("保存中…", "");
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/config/runtime.json`;
+  const headers = {
+    Authorization: `Bearer ${pat}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+
+  try {
+    // GET current SHA (required by Contents API for updates).
+    let sha = state.runtimeSha;
+    if (!sha) {
+      const getResp = await fetch(apiUrl + "?ref=main", { headers });
+      if (getResp.ok) {
+        const meta = await getResp.json();
+        sha = meta.sha;
+      } else if (getResp.status !== 404) {
+        throw new Error(`GET ${getResp.status}`);
+      }
+    }
+
+    const body = {
+      message: `chore(runtime): update via Admin SPA (max_age_days=${days}, threshold=${thr})`,
+      content: btoa(unescape(encodeURIComponent(nextText))),
+      branch: "main",
+    };
+    if (sha) body.sha = sha;
+
+    const putResp = await fetch(apiUrl, {
+      method: "PUT",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!putResp.ok) {
+      const errText = await putResp.text();
+      throw new Error(`PUT ${putResp.status}: ${errText.slice(0, 200)}`);
+    }
+    const result = await putResp.json();
+    state.runtimeSha = result.content?.sha || null;
+    state.runtime = next;
+    state.rawRuntime = nextText;
+    renderRawFiles();
+    setRuntimeStatus("✓ 保存しました。次の agent-platform 実行から反映されます", "ok");
+  } catch (e) {
+    console.error(e);
+    setRuntimeStatus("保存失敗: " + e.message, "err");
+  }
 }
 
 // --------------------------------------------------------------------------- //
@@ -178,11 +301,12 @@ async function loadSettings() {
     }
   };
 
-  const [sourcesText, pipelineText, promptText, jobsText] = await Promise.all([
+  const [sourcesText, pipelineText, promptText, jobsText, runtimeText] = await Promise.all([
     fetchText("config/sources.json"),
     fetchText(`src/apps/${state.app}/pipeline.yml`),
     fetchText(`src/apps/${state.app}/prompts/filter_prompt.md`),
     fetchText("config/jobs.yml"),
+    fetchText("config/runtime.json"),
   ]);
 
   try {
@@ -194,6 +318,13 @@ async function loadSettings() {
   state.rawPipeline = pipelineText;
   state.rawPrompt = promptText;
   state.rawJobs = jobsText;
+  state.rawRuntime = runtimeText;
+  try {
+    state.runtime = JSON.parse(runtimeText);
+  } catch (_e) {
+    state.runtime = null;
+  }
+  populateRuntimeForm();
 }
 
 // --------------------------------------------------------------------------- //
@@ -369,6 +500,8 @@ function renderRawFiles() {
   document.getElementById("pipeline-raw").textContent = state.rawPipeline || "(not loaded)";
   document.getElementById("prompt-raw").textContent = state.rawPrompt || "(not loaded)";
   document.getElementById("jobs-raw").textContent = state.rawJobs || "(not loaded)";
+  const rt = document.getElementById("runtime-raw");
+  if (rt) rt.textContent = state.rawRuntime || "(not loaded)";
 }
 
 function updateEditLinks() {
@@ -385,6 +518,7 @@ function updateEditLinks() {
   setLink("pipe-edit-link", `src/apps/${state.app}/pipeline.yml`);
   setLink("prompt-edit-link", `src/apps/${state.app}/prompts/filter_prompt.md`);
   setLink("jobs-edit-link", "config/jobs.yml");
+  setLink("runtime-edit-link", "config/runtime.json");
 }
 
 // --------------------------------------------------------------------------- //

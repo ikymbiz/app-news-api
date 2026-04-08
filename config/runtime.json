@@ -1,0 +1,10 @@
+{
+  "_comment": "Runtime overrides editable from Admin SPA Settings tab. Picked up automatically by the next agent-platform run; no redeploy needed.",
+  "collect": {
+    "max_age_days": 7,
+    "drop_undated": false
+  },
+  "report": {
+    "high_value_threshold": 8.0
+  }
+}

@@ -16,9 +16,12 @@ stages:
     depends_on: []
     config:
       sources_file: config/sources.json
+      runtime_file: config/runtime.json
       user_agent: "Mozilla/5.0 (compatible; agent-platform/1.0; +https://github.com/)"
       fetch_timeout_seconds: 20
       max_items_per_source: 50
+      max_age_days: 7
+      drop_undated: false
 
   - id: dedupe
     description: Firestore ハッシュ照合による重複除外
@@ -83,7 +86,7 @@ stages:
       output_path: artifacts/news/current_report.md
       title_template: "Daily News Digest - {{date}}"
       max_items: 30
-      high_value_threshold: 9.0
+      high_value_threshold: 8.0
 
   - id: report_json
     description: 配信用 JSON(current_news.json)生成

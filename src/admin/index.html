@@ -103,6 +103,38 @@
 
       <div class="settings-section">
         <div class="settings-header">
+          <h3>Runtime (editable)</h3>
+          <a id="runtime-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+        </div>
+        <p class="hint">
+          記事の取得期間とハイライトのスコア閾値。<strong>このセクションだけは Admin SPA から直接保存できます</strong>
+          (GitHub Contents API 経由)。保存には <code>contents:write</code> 権限の Personal Access Token が必要です。
+          PAT はこのブラウザの localStorage にのみ保存されます。
+        </p>
+        <div class="runtime-form">
+          <label>取得期間(日数)
+            <input id="rt-max-age-days" type="number" min="0" max="365" step="1" placeholder="7" />
+          </label>
+          <label class="checkbox-row">日付なし記事を捨てる
+            <input id="rt-drop-undated" type="checkbox" />
+          </label>
+          <label>★ ハイライト閾値(0-10)
+            <input id="rt-high-threshold" type="number" min="0" max="10" step="0.1" placeholder="8.0" />
+          </label>
+          <label>GitHub PAT(<code>contents:write</code>)
+            <input id="rt-github-pat" type="password" placeholder="ghp_xxx... (localStorage のみ)" autocomplete="off" />
+          </label>
+          <div class="runtime-actions">
+            <button id="rt-save-btn" type="button">Save to GitHub</button>
+            <button id="rt-reload-btn" type="button">Reload from GitHub</button>
+            <span id="rt-status" class="rt-status"></span>
+          </div>
+        </div>
+        <pre id="runtime-raw" class="raw-file">(load by clicking Refresh)</pre>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-header">
           <h3>RSS Sources <span id="src-count" class="count"></span></h3>
           <a id="src-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
         </div>

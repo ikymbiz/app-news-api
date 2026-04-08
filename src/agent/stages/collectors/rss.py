@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +42,33 @@ class StageImpl:
         timeout_seconds = int(cfg.get("fetch_timeout_seconds", 20))
         max_items_per_source = int(cfg.get("max_items_per_source", 50))
         user_agent = cfg.get("user_agent", "agent-platform/1.0")
+        max_age_days = int(cfg.get("max_age_days", 0) or 0)
+        drop_undated = bool(cfg.get("drop_undated", False))
+
+        # Runtime overrides (editable from Admin SPA without redeploy).
+        runtime_file = cfg.get("runtime_file")
+        if runtime_file:
+            try:
+                with Path(runtime_file).open("r", encoding="utf-8") as rf:
+                    runtime_doc = json.load(rf)
+                collect_overrides = (runtime_doc or {}).get("collect", {}) or {}
+                if "max_age_days" in collect_overrides:
+                    max_age_days = int(collect_overrides["max_age_days"] or 0)
+                if "drop_undated" in collect_overrides:
+                    drop_undated = bool(collect_overrides["drop_undated"])
+            except FileNotFoundError:
+                pass  # runtime.json optional
+            except (ValueError, OSError) as e:
+                ctx.logger.warning(
+                    "rss.runtime_file_invalid",
+                    extras={"file": str(runtime_file), "error": str(e)},
+                )
+
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=max_age_days)
+            if max_age_days > 0
+            else None
+        )
 
         try:
             sources = self._load_sources(Path(sources_file))
@@ -60,6 +87,8 @@ class StageImpl:
 
         collected: list[CollectedItem] = []
         source_errors: list[dict[str, str]] = []
+        skipped_old = 0
+        skipped_undated = 0
 
         for src in sources:
             if not src.get("enabled", True):
@@ -91,6 +120,14 @@ class StageImpl:
                     or ""
                 )
                 published_at = self._parse_published(entry)
+                if cutoff is not None:
+                    if published_at is None:
+                        if drop_undated:
+                            skipped_undated += 1
+                            continue
+                    elif published_at < cutoff:
+                        skipped_old += 1
+                        continue
                 item_id = hashlib.sha256(
                     f"{src['id']}|{url}|{title}".encode("utf-8")
                 ).hexdigest()[:24]
@@ -113,9 +150,17 @@ class StageImpl:
 
         ctx.record_metric("collect.items", float(len(collected)))
         ctx.record_metric("collect.source_errors", float(len(source_errors)))
+        ctx.record_metric("collect.skipped_old", float(skipped_old))
+        ctx.record_metric("collect.skipped_undated", float(skipped_undated))
         ctx.logger.info(
             "rss.collected",
-            extras={"count": len(collected), "errors": len(source_errors)},
+            extras={
+                "count": len(collected),
+                "errors": len(source_errors),
+                "skipped_old": skipped_old,
+                "skipped_undated": skipped_undated,
+                "max_age_days": max_age_days,
+            },
         )
 
         finished = datetime.now(timezone.utc)
