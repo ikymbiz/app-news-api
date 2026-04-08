@@ -201,7 +201,8 @@
       "id": "business-a16z",
       "name": "Andreessen Horowitz (a16z) AI",
       "category": "business",
-      "feed_url": "https://a16z.com/feed/",
+      "feed_url": "https://news.google.com/rss/search?q=site:a16z.com+AI&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -218,7 +219,8 @@
       "id": "newsletter-import-ai",
       "name": "Import AI (Jack Clark)",
       "category": "newsletter",
-      "feed_url": "https://importai.substack.com/feed",
+      "feed_url": "https://news.google.com/rss/search?q=%22Import+AI%22+OR+%22Jack+Clark%22+Anthropic&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -226,7 +228,8 @@
       "id": "newsletter-the-batch",
       "name": "The Batch (DeepLearning.AI)",
       "category": "newsletter",
-      "feed_url": "https://www.deeplearning.ai/the-batch/feed/",
+      "feed_url": "https://news.google.com/rss/search?q=%22The+Batch%22+%22DeepLearning.AI%22&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },

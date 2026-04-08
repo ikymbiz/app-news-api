@@ -16,7 +16,7 @@ stages:
     depends_on: []
     config:
       sources_file: config/sources.json
-      user_agent: "agent-platform/1.0 (+https://example.invalid)"
+      user_agent: "Mozilla/5.0 (compatible; agent-platform/1.0; +https://github.com/)"
       fetch_timeout_seconds: 20
       max_items_per_source: 50
 

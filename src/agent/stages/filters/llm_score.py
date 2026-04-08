@@ -234,9 +234,14 @@ class StageImpl:
             "temperature": temperature,
             "response_mime_type": response_mime_type,
         }
-        # thinking_budget は 2.5 系のみ有効。無視されても安全。
-        if thinking_budget is not None:
-            generation_config["thinking_config"] = {"thinking_budget": thinking_budget}
+        # Note: `thinking_config` was previously injected here to suppress
+        # thinking on Gemini 2.5 models, but the `google-generativeai==0.8.3`
+        # SDK rejects it with "Unknown field for GenerationConfig". Phase 11
+        # removes the field entirely; thinking remains enabled, which slightly
+        # increases per-call cost but does not affect correctness because
+        # response_mime_type still forces a JSON-only output. Re-enable when
+        # the SDK exposes a stable parameter name for thinking budgets.
+        _ = thinking_budget  # silence unused-arg warning
 
         model = genai.GenerativeModel(model_name, generation_config=generation_config)
 
