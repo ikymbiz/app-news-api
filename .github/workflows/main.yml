@@ -79,3 +79,11 @@ jobs:
       - name: Run orchestrator
         run: |
           python -m orchestrator.scheduler --job "${{ steps.resolve.outputs.job }}"
+
+- name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-results
+          path: artifacts/
+          if-no-files-found: warn
