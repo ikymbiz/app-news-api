@@ -59,6 +59,11 @@
           "type": "string",
           "description": "実行条件式。未満たし時は skipped 扱い。例: 'filter.score >= 9.0'"
         },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "false の場合、Admin SPA からの無効化として扱われ、実行時に SKIPPED となる。when とは独立。"
+        },
         "parallel": {
           "type": "boolean",
           "default": false,

@@ -1,6 +1,72 @@
 # HANDOVER: Current Status & Next Steps
 
-最終更新: 2026-04-08(Phase 13 UI 再設計セッション後)
+最終更新: 2026-04-08(Phase 15 v4 本番実装着手)
+
+---
+
+## Phase 15 — v4 モックの本番実装着手(このセッション)
+
+Phase 14 の引継書(別ファイル `HANDOVER-phase14.md`)で確定した v4 モックを、`agent-platform-step10.zip` のコードベースに実装として落とし込む作業を開始した。指示は「ヒストグラムのビン幅は 0.1 とする」。
+
+### 15.1 完了したもの
+
+- **`src/admin/index.html` を v4 構造に書き換え**(自己完結 single-file)
+  - v4 モックをベースに、`MOCK v4` バッジ・4個の `mock-note` 警告ブロック・対応する CSS 規則をすべて削除
+  - SortableJS の参照を CDN(`cdn.jsdelivr.net`)から `vendor/Sortable.min.js`(同梱)に変更
+  - **ヒストグラムをビン幅 0.1 に変更**
+    - 旧: 10 バケット(0-1, 1-2, ..., 9-10)を HTML にハードコード
+    - 新: 100 バケット(`N_BINS=100`, `BIN_WIDTH=0.1`)を JS の `renderHistogram()` で動的生成
+    - CSS は細バー向けに調整(`.vhist-bar { max-width: 6px }`、`gap: 1px`、`.vhist-count` は非表示)
+    - 軸ラベル(0..10)はそのまま 1.0 刻みを維持
+    - 閾値線の左位置は従来通り `(v / 10) * 100%`(線形マッピングなので変化なし)
+    - 「閾値以上の件数」は `firstAbove = ⌈(v - 0.05) / 0.1⌉` から `i ≥ firstAbove` のバケット合計
+  - データ未取得時用のプレースホルダ分布(平均 6.5・σ=1.4 の釣鐘曲線、合計 ~1239)を内蔵
+  - `loadScoreData()` を追加。`localStorage.r2_base + /news/current_news.json` を fetch してスコアをビニング(非同期、失敗時は静かにプレースホルダのまま)
+  - `DOMContentLoaded` で `renderHistogram()` → `loadScoreData()` の順に実行
+- **SortableJS 1.15.0 を `src/admin/vendor/Sortable.min.js` として同梱**(npm レジストリの tarball から 44KB)
+- **旧 `src/admin/app.js` / `style.css` を `*.legacy.*` にリネーム**して退避(参照用)
+- **`src/orchestrator/core.py` に `enabled` フラグ対応**
+  - `StageSpec` に `enabled: bool = True` を追加
+  - `load_pipeline()` で `s.get("enabled", True)` をパース
+  - 実行ループの `when` 評価より前に `if not spec.enabled: outputs[spec.id] = SKIPPED; continue` を追加
+- **`config/pipeline.schema.json` に `enabled` プロパティを追加**(default: true、`additionalProperties: false` を維持しつつ追加)
+- **`src/cloudflare/worker.js` に GitHub Contents API プロキシを追加**
+  - `GET /api/github/read?path=<repo-relative>` — `env.GH_PAT` を使って Contents API から base64 デコード済み内容を返す
+  - `POST /api/github/write` — ボディ `{ path, content, message?, sha? }`。`sha` 未指定時は内部で HEAD して取得し PUT(create / update 両対応)
+  - **二段階認証**: 全リクエストの先頭で `checkAccess()` を呼び、`Cf-Access-Authenticated-User-Email` ヘッダが無ければ 401。`env.ACCESS_ALLOWED_EMAILS`(任意、カンマ区切り)が設定されていれば追加で照合し、リストに無いメールは 403
+  - `safeRepoPath()` で `..` や絶対パスを拒否
+  - CORS を `POST` と `Cf-Access-Authenticated-User-Email` ヘッダに対応
+- **`src/cloudflare/wrangler.toml` を更新**
+  - `GH_REPO`(`owner/name`)、`GH_BRANCH`、`ACCESS_ALLOWED_EMAILS` を `[vars]` に追加
+  - `GH_PAT` は機密のため `wrangler secret put GH_PAT` の手順をコメントで明記
+
+### 15.2 まだやっていない(次セッション必須)
+
+以下は Phase 14 引継書 §3.2 に列挙されていた本番実装項目のうち、このセッションでは時間切れで未着手:
+
+1. **新 index.html の CRUD ボタンを実 API に接続**
+   - パイプライン: ドラッグ並替・ON/OFF・追加・削除 → `/api/github/write` で `src/apps/news/pipeline.yml` を PUT
+   - RSS ソース: 追加・編集・削除 → `config/sources.json` を PUT
+   - スケジュール: 追加・編集・削除 → `config/jobs.yml` を PUT
+   - 接続設定: `r2_base` を `localStorage` に保存(これだけは Worker 不要)
+   - プロンプト編集: `src/apps/news/prompts/*.md` を PUT
+   - 現状はモック由来の DOM 操作のみで、ページ遷移すると変更が消える
+2. **RSS フィードプレビュー** — クライアントから直接フィード fetch + 簡易パース、または Worker に `/api/rss/preview` を追加
+3. **コスト画面の折れ線グラフのデータソース** — `meta/metrics.json` から日次集計
+4. **実行履歴のデータソース** — `meta/runs.json` を読む
+5. **runtime.json の去就決定** — Phase 14 で「保存先を runtime.json か pipeline.yml か」が未確定。スコア分布画面の保存ボタンの実装時に決める必要あり
+6. **Cloudflare Access 許可メールアドレスの確定** — Phase 14 引継書 §1.4 から未確定のまま
+7. **`docs/POST_INSTALL.md` に Cloudflare Access + `wrangler secret put GH_PAT` の手順を追記**
+8. **`docs/REQUIREMENTS.md` / `docs/SYSTEM_DESIGN.md` を v4 構造に合わせて改訂**
+9. **テスト** — `tests/test_pipeline_smoke.py` に `enabled: false` のステージスキップを検証するケースを追加
+10. **既存バグ調査**(Phase 14 §3.3): 実行履歴・コスト画面にデータが出ない問題の切り分け
+
+### 15.3 v4 → 実装で持ち越した設計上の留意点
+
+- **ヒストグラム 100 バー の表示密度**: 320px 幅の端末で各バーは ~3px(1px gap 込み)。視認は可能だが密。`max-width: 6px` にしたので両側に余白ができる。ユーザフィードバックで「狭い」となれば、(a) `.vhist-bars` を `overflow-x: auto` にして横スクロール、(b) 表示時のみ N 個のビンをマージ、のいずれかを検討
+- **`stages.catalog.yml` の DAG 整合性**: v4 のドラッグ並替で UI 上は順序を変えられるが、`depends_on` の整合は壊れる可能性。書込時に `topological_order()` を呼んで検証し、不整合なら 400 を返すべき
+- **`Cf-Access-Authenticated-User-Email` の信頼**: Cloudflare Access は前段で JWT を検証してこのヘッダを付与する。Access を経由せず Worker に直接来たリクエストにヘッダは付かないので 401 で弾ける。ただし Worker のドメインを Access アプリケーションに紐付けることが必須(紐付けないとヘッダが付与されない)。`docs/POST_INSTALL.md` での手順記載が必要
+- **`atob` / `btoa` と非 ASCII**: GitHub Contents API は base64 を要求。`btoa(unescape(encodeURIComponent(text)))` パターンで UTF-8 に対応(日本語のプロンプトファイルが多いため必須)
 
 ---
 

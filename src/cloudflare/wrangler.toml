@@ -16,6 +16,15 @@ compatibility_date = "2025-05-01"
 [vars]
 ALLOWED_APPS = "news"
 CORS_ORIGIN = "*"
+# GitHub Contents プロキシ用(非機密)
+# GH_REPO は "owner/name" 形式。GH_BRANCH 未設定時は main。
+# GH_PAT は機密のため `wrangler secret put GH_PAT` で登録すること。
+# ACCESS_ALLOWED_EMAILS は Cloudflare Access の許可リストに加えて Worker 側でも
+# 二段階で検証したい場合に設定(カンマ区切り)。空なら Cf-Access-Authenticated-User-Email
+# が付与されているリクエストはすべて許可。
+GH_REPO = "owner/agent-platform"
+GH_BRANCH = "main"
+ACCESS_ALLOWED_EMAILS = ""
 
 # --------------------------------------------------------------------------- #
 # R2 binding

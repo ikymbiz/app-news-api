@@ -2,278 +2,1640 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agent Platform — 管理画面</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Agent Platform</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1a1f2b;
+      --border: #252a34;
+      --border-2: #2a3142;
+      --fg: #e8eaed;
+      --muted: #8b93a1;
+      --accent: #5fa8ff;
+      --success: #4ade80;
+      --failed: #f87171;
+      --warning: #fbbf24;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --tap: 44px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 16px;
+      line-height: 1.4;
+    }
+    button { font-family: inherit; }
+    a { color: var(--accent); }
+
+    /* ============ Header ============ */
+    header.app-header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .back-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      width: 40px; height: 40px;
+      border-radius: 8px;
+      font-size: 20px;
+      cursor: pointer;
+      display: none;
+    }
+    body:not([data-screen="home"]) .back-btn { display: block; }
+    header h1 { margin: 0; font-size: 17px; font-weight: 600; flex: 1; }
+
+    main { padding: 16px; padding-bottom: 80px; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .screen-title { margin: 0 0 18px 0; font-size: 20px; font-weight: 700; }
+    .screen-desc { color: var(--muted); font-size: 13px; margin: -10px 0 18px; line-height: 1.5; }
+
+    /* ============ Home ============ */
+    .home-section-title {
+      color: var(--muted); font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin: 22px 0 10px 0; font-weight: 600;
+    }
+    .home-section-title:first-child { margin-top: 8px; }
+    .card-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 14px;
+      min-height: 92px;
+      cursor: pointer;
+      text-align: left;
+      color: var(--fg);
+    }
+    .card:active { transform: scale(0.97); border-color: var(--accent); }
+    .card-icon { font-size: 24px; margin-bottom: 6px; }
+    .card-label { font-size: 14px; font-weight: 600; }
+    .card-hint { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .card.full { grid-column: 1 / -1; }
+    .card.accent {
+      border-color: var(--accent);
+      background: linear-gradient(135deg, var(--panel) 0%, rgba(95, 168, 255, 0.1) 100%);
+    }
+
+    /* ============ Common ============ */
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .section h3 { margin: 0 0 12px 0; font-size: 15px; font-weight: 600; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .section-header h3 { margin: 0; }
+    label.field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    label.field input,
+    label.field select,
+    label.field textarea {
+      background: #0e1320;
+      color: var(--fg);
+      border: 1px solid #3a4258;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 16px;
+      min-height: var(--tap);
+      width: 100%;
+    }
+    label.field textarea {
+      font-family: var(--mono);
+      font-size: 13px;
+      min-height: 160px;
+      resize: vertical;
+    }
+    .btn {
+      padding: 14px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: var(--tap);
+      width: 100%;
+    }
+    .btn-primary { background: var(--accent); color: #041024; }
+    .btn-secondary { background: #475569; color: var(--fg); }
+    .btn-danger { background: #7f1d1d; color: #fecaca; }
+    .btn-row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+    .status-ok { color: var(--success); }
+    .status-warn { color: var(--warning); }
+    .status-err { color: var(--failed); }
+
+    /* ============ ニュース ============ */
+    .news-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .news-card-head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .news-score {
+      font-family: var(--mono);
+      font-size: 16px; font-weight: 700;
+      color: var(--accent);
+      min-width: 42px;
+    }
+    .cat {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px; font-weight: 600;
+      text-transform: uppercase;
+      background: var(--border);
+    }
+    .cat-policy { background: #3b3a55; color: #c5b8ff; }
+    .cat-lab { background: #1f3a47; color: #7fd0ff; }
+    .cat-business { background: #4a3a1c; color: #ffce7a; }
+    .news-title { margin: 0 0 6px 0; font-size: 15px; line-height: 1.4; }
+    .news-source { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+    .news-reason { color: #c9d1d9; font-size: 13px; margin: 8px 0; }
+
+    /* ============ スコア分布: 縦ヒストグラム ============ */
+    .vhist {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 14px 10px 14px;
+      margin-bottom: 14px;
+    }
+    .vhist-title {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      text-align: center;
+    }
+    .vhist-bars {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1px;
+      height: 200px;
+      border-bottom: 2px solid var(--border-2);
+      position: relative;
+    }
+    .vhist-bar-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100%;
+      position: relative;
+    }
+    .vhist-count {
+      display: none;
+    }
+    .vhist-bar {
+      width: 100%;
+      max-width: 6px;
+      background: var(--accent);
+      border-radius: 4px 4px 0 0;
+      min-height: 2px;
+      transition: background 0.2s;
+    }
+    .vhist-bar.above-thr {
+      background: var(--success);
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+    }
+    .vhist-bar.low { background: var(--muted); }
+    .vhist-labels {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 4px 0 4px;
+    }
+    .vhist-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      min-width: 8px;
+      text-align: center;
+    }
+    .vhist-threshold-line {
+      position: absolute;
+      top: 0; bottom: 0;
+      border-left: 2px dashed var(--warning);
+      pointer-events: none;
+    }
+    .vhist-threshold-label {
+      position: absolute;
+      top: -4px;
+      left: 4px;
+      background: var(--warning);
+      color: #000;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+
+    .threshold-slider {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .threshold-value {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: var(--mono);
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .threshold-slider input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      background: transparent;
+    }
+    .threshold-slider input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px; background: var(--border); border-radius: 3px;
+    }
+    .threshold-slider input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 26px; height: 26px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-top: -10px;
+    }
+    .threshold-effect {
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--panel-2);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .threshold-effect strong { color: var(--accent); font-size: 16px; }
+
+    /* ============ パイプライン+プロンプト統合 ============ */
+    .ordered-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 14px 0;
+    }
+    .stage-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .stage-main {
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .drag-handle {
+      color: var(--muted);
+      font-size: 22px;
+      padding: 6px 4px;
+      touch-action: none;
+      user-select: none;
+      cursor: grab;
+    }
+    .order-num {
+      background: var(--accent);
+      color: #041024;
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 12px;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .order-main { flex: 1; min-width: 0; }
+    .order-main .name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      word-break: break-word;
+    }
+    .order-main .meta {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .order-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .order-actions button {
+      background: var(--border);
+      color: var(--fg);
+      border: 1px solid var(--border-2);
+      border-radius: 6px;
+      width: 34px; height: 34px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .order-actions button.danger { background: #7f1d1d; color: #fecaca; }
+
+    /* Stage on/off toggle checkbox (pipeline) */
+    .stage-toggle {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      padding: 4px;
+      cursor: pointer;
+    }
+    .stage-toggle input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .stage-item.disabled-stage .order-main,
+    .stage-item.disabled-stage .order-num,
+    .stage-item.disabled-stage .stage-prompt {
+      opacity: 0.35;
+    }
+    .stage-item.disabled-stage .stage-prompt {
+      pointer-events: none;
+    }
+    .stage-item.sortable-ghost {
+      opacity: 0.4;
+      background: var(--panel-2);
+    }
+    .stage-item.sortable-chosen .drag-handle { color: var(--accent); }
+
+    /* Prompt attached to a stage */
+    .stage-prompt {
+      margin: 0 12px 12px 48px;
+      padding: 10px 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--border-2);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .stage-prompt:active { border-color: var(--accent); }
+    .stage-prompt-icon { font-size: 16px; }
+    .stage-prompt-main { flex: 1; min-width: 0; }
+    .stage-prompt-name {
+      font-size: 13px;
+      color: var(--accent);
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .stage-prompt-model {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .stage-prompt-edit {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .add-btn {
+      background: transparent;
+      border: 2px dashed var(--border-2);
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 14px;
+      width: 100%;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .add-btn:active { border-color: var(--accent); color: var(--accent); }
+
+    /* プロンプトライブラリ item */
+    .lib-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .lib-item.unused { opacity: 0.7; }
+    .lib-main { flex: 1; min-width: 0; }
+    .lib-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 3px;
+      word-break: break-word;
+    }
+    .lib-meta {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .lib-status {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .lib-status.used { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+    .lib-status.unused { background: var(--border); color: var(--muted); }
+
+    /* ============ RSS ============ */
+    .rss-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .rss-item.disabled .rss-main { opacity: 0.45; }
+    .rss-head {
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .rss-toggle {
+      width: 40px; height: 24px;
+      background: var(--border);
+      border-radius: 12px;
+      position: relative;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .rss-toggle.on { background: var(--accent); }
+    .rss-toggle::after {
+      content: "";
+      position: absolute;
+      width: 20px; height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      top: 2px; left: 2px;
+      transition: left 0.15s;
+    }
+    .rss-toggle.on::after { left: 18px; }
+    .rss-main { flex: 1; min-width: 0; }
+    .rss-main .name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .rss-main .url {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rss-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .rss-actions button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 34px; height: 34px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .rss-head { cursor: pointer; }
+    .rss-chevron {
+      color: var(--muted);
+      font-size: 12px;
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+    .rss-item.expanded .rss-chevron { transform: rotate(180deg); }
+    .rss-preview { display: none; }
+    .rss-item.expanded .rss-preview { display: block; }
+    .rss-preview {
+      border-top: 1px solid var(--border);
+      background: var(--panel-2);
+      padding: 10px 12px;
+    }
+    .rss-preview-title {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .rss-preview-item {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .rss-preview-item:last-child { border-bottom: none; }
+    .rss-preview-item .t { color: var(--fg); margin-bottom: 2px; font-weight: 500; }
+    .rss-preview-item .d { color: var(--muted); font-size: 10px; }
+
+    /* ============ スケジュール ============ */
+    .schedule-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    /* job list (schedule CRUD) */
+    .job-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .job-item.disabled .job-main { opacity: 0.45; }
+    .job-head {
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .job-main { flex: 1; min-width: 0; }
+    .job-name { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+    .job-meta { font-size: 11px; color: var(--muted); }
+    .job-foot {
+      border-top: 1px solid var(--border);
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--panel-2);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .job-foot code {
+      font-family: var(--mono);
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .danger-btn { color: var(--failed) !important; }
+    .schedule-next {
+      font-family: var(--mono);
+      font-size: 20px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .schedule-cron {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .schedule-desc {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--fg);
+    }
+
+    /* ============ Tables ============ */
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 14px;
+    }
+    table { width: 100%; border-collapse: collapse; min-width: 500px; }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    th {
+      background: #1e222c;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge.success { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+    .badge.failed { background: rgba(248, 113, 113, 0.15); color: var(--failed); }
+
+    .cost-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .cost-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cost-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; }
+    .cost-card .value {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    @media (min-width: 600px) {
+      .card-grid { grid-template-columns: repeat(3, 1fr); }
+      .cost-cards { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+  <script src="vendor/Sortable.min.js"></script>
 </head>
-<body>
+<body data-screen="home">
+
   <header class="app-header">
-    <h1>Agent Platform</h1>
-    <nav>
-      <button data-view="news" class="nav active">ニュース</button>
-      <button data-view="runs" class="nav">実行履歴</button>
-      <button data-view="stages" class="nav">ステージ詳細</button>
-      <button data-view="cost" class="nav">コスト</button>
-      <button data-view="artifacts" class="nav">成果物</button>
-      <button data-view="settings" class="nav">設定</button>
-    </nav>
-    <div class="config">
-      <label>配信URL
-        <input id="distributor-url" type="url" placeholder="https://artifacts.example.invalid" />
-      </label>
-      <label>GitHubリポジトリ
-        <input id="github-repo" type="text" placeholder="owner/repo (例: ikymbiz/app-news-api)" />
-      </label>
-      <label>アプリ
-        <select id="app-select"><option value="news">news</option></select>
-      </label>
-      <button id="refresh">再読み込み</button>
-    </div>
+    <button class="back-btn" onclick="goHome()">←</button>
+    <h1 id="header-title">Agent Platform</h1>
   </header>
 
   <main>
 
-    <!-- ============ ニュース ============ -->
-    <section id="view-news" class="view active">
-      <h2>ニュース</h2>
-      <div class="news-controls">
-        <label>最低スコア
-          <input id="news-min-score" type="number" min="0" max="10" step="0.5" value="7" />
+    <!-- ======================= HOME ======================= -->
+    <section class="screen active" data-screen="home">
+      <h2 class="screen-title">メニュー</h2>
+      <p class="screen-desc">やりたいことを選んでください。</p>
+
+      <div class="home-section-title">閲覧</div>
+      <div class="card-grid">
+        <button class="card accent" onclick="go('news')">
+          <div class="card-icon">📰</div>
+          <div class="card-label">ニュース</div>
+          <div class="card-hint">記事を見る</div>
+        </button>
+        <button class="card" onclick="go('score')">
+          <div class="card-icon">📊</div>
+          <div class="card-label">スコア分布</div>
+          <div class="card-hint">閾値・取得期間</div>
+        </button>
+        <button class="card" onclick="go('runs')">
+          <div class="card-icon">⏱️</div>
+          <div class="card-label">実行履歴</div>
+          <div class="card-hint">ステージ詳細含む</div>
+        </button>
+        <button class="card" onclick="go('cost')">
+          <div class="card-icon">💰</div>
+          <div class="card-label">コスト</div>
+          <div class="card-hint">LLM利用料</div>
+        </button>
+        <button class="card" onclick="go('schedule')">
+          <div class="card-icon">🕐</div>
+          <div class="card-label">スケジュール</div>
+          <div class="card-hint">次回実行</div>
+        </button>
+      </div>
+
+      <div class="home-section-title">編集</div>
+      <div class="card-grid">
+        <button class="card" onclick="go('pipeline')">
+          <div class="card-icon">🔧</div>
+          <div class="card-label">パイプライン</div>
+          <div class="card-hint">構成+プロンプト</div>
+        </button>
+        <button class="card" onclick="go('rss')">
+          <div class="card-icon">📡</div>
+          <div class="card-label">RSSソース</div>
+          <div class="card-hint">追加・削除</div>
+        </button>
+      </div>
+
+      <div class="home-section-title">システム</div>
+      <div class="card-grid">
+        <button class="card full" onclick="go('connection')">
+          <div class="card-icon">⚙️</div>
+          <div class="card-label">接続設定とアクセス制御</div>
+          <div class="card-hint">配信URL / リポジトリ / アクセス権</div>
+        </button>
+      </div>
+    </section>
+
+    <!-- ======================= ニュース ======================= -->
+    <section class="screen" data-screen="news">
+      <h2 class="screen-title">ニュース</h2>
+
+      <details class="section" style="padding: 0;">
+        <summary style="padding: 14px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 600;">🔍 フィルタ</span>
+          <span style="color: var(--muted); font-size: 12px;">最低 7.0 / すべて / スコア降順</span>
+        </summary>
+        <div style="padding: 0 14px 14px 14px;">
+          <label class="field">最低スコア
+            <input type="number" value="7" min="0" max="10" step="0.5" />
+          </label>
+          <label class="field">カテゴリ
+            <select>
+              <option>(すべて)</option>
+              <option>policy</option>
+              <option>lab</option>
+              <option>business</option>
+            </select>
+          </label>
+          <label class="field">並び順
+            <select>
+              <option>スコア降順</option>
+              <option>新着順</option>
+            </select>
+          </label>
+        </div>
+      </details>
+
+      <div class="news-card">
+        <div class="news-card-head">
+          <span class="news-score">★ 8.5</span>
+          <span class="cat cat-policy">policy</span>
+        </div>
+        <h3 class="news-title">EU AI Act Phase 2 施行スケジュール確定</h3>
+        <div class="news-source">policy-eu-commission-ai ・ 2026-04-08</div>
+        <p class="news-reason">EU AI Actの第2段階施行日が確定。業界全体に影響する強制力ある規制の確定として高得点。</p>
+      </div>
+      <div class="news-card">
+        <div class="news-card-head">
+          <span class="news-score">★ 8.3</span>
+          <span class="cat cat-lab">lab</span>
+        </div>
+        <h3 class="news-title">OpenAI、新推論モデル o4 を発表</h3>
+        <div class="news-source">lab-openai ・ 2026-04-08</div>
+        <p class="news-reason">フロンティアモデルの新機能正式発表。推論能力のベンチマーク更新を主張。</p>
+      </div>
+      <div class="news-card">
+        <div class="news-card-head">
+          <span class="news-score">7.8</span>
+          <span class="cat cat-business">business</span>
+        </div>
+        <h3 class="news-title">Anthropic、$5Bの追加資金調達</h3>
+        <div class="news-source">business-techcrunch ・ 2026-04-07</div>
+        <p class="news-reason">大型調達。競合構造への影響が見込まれる。</p>
+      </div>
+    </section>
+
+    <!-- ======================= スコア分布 + 閾値 + 取得期間 ======================= -->
+    <section class="screen" data-screen="score">
+      <h2 class="screen-title">スコア分布</h2>
+      <p class="screen-desc">最新実行の全1239件の分布。ここで閾値と取得期間をまとめて調整します。</p>
+
+      <div class="vhist">
+        <div class="vhist-title">記事数 / スコア帯(全1239件)</div>
+        <div class="vhist-bars" id="vhist-bars">
+          <!-- 100 buckets (bin width 0.1), generated by JS in renderHistogram() -->
+          <div class="vhist-threshold-line" id="thr-line" style="left: 80%;">
+            <span class="vhist-threshold-label">★ 8.0</span>
+          </div>
+        </div>
+        <div class="vhist-labels">
+          <span class="vhist-label">0</span>
+          <span class="vhist-label">1</span>
+          <span class="vhist-label">2</span>
+          <span class="vhist-label">3</span>
+          <span class="vhist-label">4</span>
+          <span class="vhist-label">5</span>
+          <span class="vhist-label">6</span>
+          <span class="vhist-label">7</span>
+          <span class="vhist-label">8</span>
+          <span class="vhist-label">9</span>
+          <span class="vhist-label">10</span>
+        </div>
+      </div>
+
+      <div class="threshold-slider">
+        <div class="threshold-value" id="thr-val">8.0</div>
+        <input type="range" min="0" max="10" step="0.1" value="8.0"
+               oninput="updateThreshold(this.value)" />
+        <div class="threshold-effect">
+          この閾値で ★ マーク対象: <strong id="thr-count">380</strong> 件
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>取得条件</h3>
+        <label class="field">取得期間(日数)
+          <input type="number" value="7" min="0" max="365" />
         </label>
-        <label>カテゴリ
-          <select id="news-category-filter">
-            <option value="">(すべて)</option>
-          </select>
-        </label>
-        <label>並び順
-          <select id="news-sort">
-            <option value="score-desc">スコア降順</option>
-            <option value="score-asc">スコア昇順</option>
-            <option value="date-desc">新着順</option>
-          </select>
+        <label class="field">
+          <span style="display: flex; align-items: center; gap: 10px; color: var(--fg);">
+            <input type="checkbox" style="width: 22px; height: 22px;" />
+            日付不明の記事を除外
+          </span>
         </label>
       </div>
-      <div id="news-meta" class="news-meta"></div>
-      <div id="news-list" class="news-list"></div>
-      <p id="news-empty" class="empty">配信URL を設定して再読み込みすると記事が表示されます。</p>
-    </section>
 
-    <!-- ============ 実行履歴 ============ -->
-    <section id="view-runs" class="view">
-      <h2>実行履歴</h2>
-      <div class="filters">
-        <label>状態
-          <select id="filter-status">
-            <option value="">(すべて)</option>
-            <option value="success">success</option>
-            <option value="failed">failed</option>
-            <option value="running">running</option>
-          </select>
-        </label>
-        <label>開始日以降
-          <input id="filter-since" type="date" />
-        </label>
+      <div class="btn-row">
+        <button class="btn btn-primary">この設定で保存</button>
       </div>
-      <table id="runs-table">
-        <thead><tr>
-          <th>job_run_id</th><th>job</th><th>状態</th>
-          <th>開始</th><th>所要</th><th>コスト</th><th>段数</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-      <p class="empty">配信URL を Worker に向けるとデータが読み込まれます。</p>
     </section>
 
-    <!-- ============ ステージ詳細 ============ -->
-    <section id="view-stages" class="view">
-      <h2>ステージ詳細</h2>
-      <table id="stages-table">
-        <thead><tr>
-          <th>job_run_id</th><th>stage</th><th>use</th><th>状態</th>
-          <th>試行</th><th>所要</th><th>エラー</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
+    <!-- ======================= 実行履歴(ステージ詳細統合) ======================= -->
+    <section class="screen" data-screen="runs">
+      <h2 class="screen-title">実行履歴</h2>
+      <p class="screen-desc">各実行をタップすると内部のステージ詳細が展開されます。</p>
+
+      <details class="section" style="padding: 0;" open>
+        <summary style="padding: 14px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px;">
+          <span class="badge success">success</span>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 14px;">run_0412 ・ news-daily</div>
+            <div style="color: var(--muted); font-size: 11px; font-family: var(--mono);">04-08 07:30 ・ 2m 21s ・ $0.023</div>
+          </div>
+          <span style="color: var(--muted); font-size: 12px;">4 stages ▼</span>
+        </summary>
+        <div style="padding: 0 14px 14px 14px;">
+          <div class="table-wrap" style="margin-bottom: 0;">
+            <table style="min-width: auto;">
+              <thead><tr><th>stage</th><th>状態</th><th>所要</th><th>in/out</th></tr></thead>
+              <tbody>
+                <tr><td>collect</td><td><span class="badge success">success</span></td><td>18s</td><td>- / 1239</td></tr>
+                <tr><td>dedupe</td><td><span class="badge success">success</span></td><td>2s</td><td>1239 / 1239</td></tr>
+                <tr><td>filter</td><td><span class="badge success">success</span></td><td>1m 52s</td><td>1239 / 1239</td></tr>
+                <tr><td>report</td><td><span class="badge success">success</span></td><td>1s</td><td>1239 / 30</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details class="section" style="padding: 0;">
+        <summary style="padding: 14px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px;">
+          <span class="badge success">success</span>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 14px;">run_0411 ・ news-daily</div>
+            <div style="color: var(--muted); font-size: 11px; font-family: var(--mono);">04-07 07:30 ・ 1m 58s ・ $0.019</div>
+          </div>
+          <span style="color: var(--muted); font-size: 12px;">4 stages ▼</span>
+        </summary>
+        <div style="padding: 0 14px 14px 14px; color: var(--muted); font-size: 12px;">
+          展開すると上と同様のステージテーブルが表示されます。
+        </div>
+      </details>
+
+      <details class="section" style="padding: 0;">
+        <summary style="padding: 14px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px;">
+          <span class="badge failed">failed</span>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; font-size: 14px;">run_0410 ・ news-daily</div>
+            <div style="color: var(--muted); font-size: 11px; font-family: var(--mono);">04-06 07:30 ・ 45s ・ $0.002</div>
+          </div>
+          <span style="color: var(--muted); font-size: 12px;">4 stages ▼</span>
+        </summary>
+        <div style="padding: 0 14px 14px 14px; color: var(--muted); font-size: 12px;">
+          失敗時はエラーメッセージとスタックトレースも展開されます。
+        </div>
+      </details>
     </section>
 
-    <!-- ============ コスト ============ -->
-    <section id="view-cost" class="view">
-      <h2>コスト</h2>
-      <div class="cost-summary">
-        <div class="stat"><span class="label">本日</span><span id="cost-today">—</span></div>
-        <div class="stat"><span class="label">7日</span><span id="cost-7d">—</span></div>
-        <div class="stat"><span class="label">30日</span><span id="cost-30d">—</span></div>
+    <!-- ======================= コスト ======================= -->
+    <section class="screen" data-screen="cost">
+      <h2 class="screen-title">コスト</h2>
+
+      <div class="section">
+        <h3>日次コスト(直近30日)</h3>
+        <svg id="cost-chart" viewBox="0 0 300 140" style="width: 100%; height: 140px;" preserveAspectRatio="none">
+          <!-- grid -->
+          <line x1="0" y1="20"  x2="300" y2="20"  stroke="#2a3142" stroke-width="0.5" stroke-dasharray="2,2"/>
+          <line x1="0" y1="60"  x2="300" y2="60"  stroke="#2a3142" stroke-width="0.5" stroke-dasharray="2,2"/>
+          <line x1="0" y1="100" x2="300" y2="100" stroke="#2a3142" stroke-width="0.5" stroke-dasharray="2,2"/>
+          <!-- area fill -->
+          <path d="M 0 110 L 10 100 L 20 95 L 30 105 L 40 90 L 50 85 L 60 92 L 70 75 L 80 80 L 90 70 L 100 65 L 110 72 L 120 60 L 130 55 L 140 62 L 150 50 L 160 58 L 170 45 L 180 52 L 190 40 L 200 48 L 210 35 L 220 42 L 230 30 L 240 38 L 250 28 L 260 32 L 270 25 L 280 30 L 290 22 L 300 28 L 300 140 L 0 140 Z"
+                fill="rgba(95, 168, 255, 0.15)"/>
+          <!-- line -->
+          <path d="M 0 110 L 10 100 L 20 95 L 30 105 L 40 90 L 50 85 L 60 92 L 70 75 L 80 80 L 90 70 L 100 65 L 110 72 L 120 60 L 130 55 L 140 62 L 150 50 L 160 58 L 170 45 L 180 52 L 190 40 L 200 48 L 210 35 L 220 42 L 230 30 L 240 38 L 250 28 L 260 32 L 270 25 L 280 30 L 290 22 L 300 28"
+                fill="none" stroke="#5fa8ff" stroke-width="2" stroke-linejoin="round"/>
+          <!-- labels -->
+          <text x="2"   y="16" fill="#8b93a1" font-size="9" font-family="ui-monospace, monospace">$0.030</text>
+          <text x="2"   y="56" fill="#8b93a1" font-size="9" font-family="ui-monospace, monospace">$0.020</text>
+          <text x="2"   y="96" fill="#8b93a1" font-size="9" font-family="ui-monospace, monospace">$0.010</text>
+          <text x="2"   y="136" fill="#8b93a1" font-size="9" font-family="ui-monospace, monospace">$0.000</text>
+          <text x="0"   y="148" fill="#8b93a1" font-size="9">30日前</text>
+          <text x="280" y="148" fill="#8b93a1" font-size="9">今日</text>
+        </svg>
       </div>
-      <table id="cost-table">
-        <thead><tr>
-          <th>モデル</th><th>入力tok</th><th>出力tok</th><th>USD</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
+
+      <div class="cost-cards">
+        <div class="cost-card"><span class="label">本日</span><span class="value">$0.023</span></div>
+        <div class="cost-card"><span class="label">7日</span><span class="value">$0.156</span></div>
+        <div class="cost-card"><span class="label">30日</span><span class="value">$0.687</span></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>モデル</th><th>入力tok</th><th>出力tok</th><th>USD</th></tr></thead>
+          <tbody>
+            <tr><td><code>gemini-2.5-flash-lite</code></td><td>2,245,000</td><td>90,400</td><td>$0.156</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
-    <!-- ============ 成果物 ============ -->
-    <section id="view-artifacts" class="view">
-      <h2>成果物</h2>
-      <table id="artifacts-table">
-        <thead><tr>
-          <th>キー</th><th>サイズ</th><th>更新</th><th>etag</th><th></th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
+    <!-- ======================= スケジュール ======================= -->
+    <section class="screen" data-screen="schedule">
+      <h2 class="screen-title">スケジュール</h2>
+      <p class="screen-desc">自動実行するジョブの一覧。追加・編集・削除できます。</p>
+
+      <!-- 新規追加フォーム(折りたたみ) -->
+      <details class="section" style="padding: 0;">
+        <summary style="padding: 14px; cursor: pointer; list-style: none; color: var(--accent); font-weight: 600;">
+          + 新しいジョブを追加
+        </summary>
+        <div style="padding: 0 14px 14px 14px;">
+          <label class="field">ジョブ名
+            <input type="text" placeholder="例: news-weekly" />
+          </label>
+          <label class="field">パイプライン
+            <select>
+              <option>news</option>
+            </select>
+          </label>
+          <label class="field">分
+            <input type="number" value="0" min="0" max="59" />
+          </label>
+          <label class="field">時 (UTC)
+            <input type="number" value="0" min="0" max="23" />
+          </label>
+          <label class="field">曜日
+            <select>
+              <option>毎日</option>
+              <option>平日のみ</option>
+              <option>月曜のみ</option>
+            </select>
+          </label>
+          <div class="btn-row">
+            <button class="btn btn-primary">追加</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- ジョブリスト -->
+      <div class="job-item">
+        <div class="job-head">
+          <div class="rss-toggle on" onclick="this.classList.toggle('on'); this.closest('.job-item').classList.toggle('disabled');"></div>
+          <div class="job-main">
+            <div class="job-name">news-daily</div>
+            <div class="job-meta">毎日 07:30 JST ・ next: 明日 07:30</div>
+          </div>
+          <div class="rss-actions">
+            <button title="編集" onclick="alert('モック: 編集フォームを展開')">✎</button>
+            <button title="削除" class="danger-btn" onclick="if(confirm('news-daily を削除しますか?')) this.closest('.job-item').remove();">🗑</button>
+          </div>
+        </div>
+        <div class="job-foot">
+          <code>30 22 * * *</code> (UTC)
+          <button class="btn-ghost" onclick="alert('モック: workflow_dispatch を叩く')">▶ 今すぐ実行</button>
+        </div>
+      </div>
+
+      <div class="job-item">
+        <div class="job-head">
+          <div class="rss-toggle on" onclick="this.classList.toggle('on'); this.closest('.job-item').classList.toggle('disabled');"></div>
+          <div class="job-main">
+            <div class="job-name">news-weekly-digest</div>
+            <div class="job-meta">毎週月曜 08:00 JST ・ next: 2026-04-13 08:00</div>
+          </div>
+          <div class="rss-actions">
+            <button>✎</button>
+            <button class="danger-btn">🗑</button>
+          </div>
+        </div>
+        <div class="job-foot">
+          <code>0 23 * * 0</code> (UTC)
+          <button class="btn-ghost">▶ 今すぐ実行</button>
+        </div>
+      </div>
     </section>
 
-    <!-- ============ 設定 ============ -->
-    <section id="view-settings" class="view">
-      <h2>設定</h2>
-      <p class="hint">
-        以下の設定はすべて GitHub リポジトリの実ファイルに保存されます。
-        <strong>動作チューニング・プロンプト・パイプライン構成</strong> の3つは画面から直接編集して保存できます。
-        保存には <code>contents:write</code> 権限の Personal Access Token が必要で、
-        トークンはこのブラウザの localStorage にのみ保存されます。
+    <!-- ======================= パイプライン ======================= -->
+    <section class="screen" data-screen="pipeline">
+      <h2 class="screen-title">パイプライン</h2>
+      <p class="screen-desc">
+        ⋮⋮ をドラッグして順序変更、チェックボックスで処理する/しないを切替、✎ で詳細編集、🗑 で削除。
       </p>
 
-      <!-- ----- 動作チューニング ----- -->
-      <div class="settings-section">
-        <div class="settings-header">
-          <h3>動作チューニング</h3>
-          <a id="runtime-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
-        </div>
-        <div class="runtime-form">
-          <label>取得期間(日数)
-            <input id="rt-max-age-days" type="number" min="0" max="365" step="1" placeholder="7" />
-          </label>
-          <label class="checkbox-row">日付不明の記事を除外
-            <input id="rt-drop-undated" type="checkbox" />
-          </label>
-          <label>★ ハイライト閾値(0-10)
-            <input id="rt-high-threshold" type="number" min="0" max="10" step="0.1" placeholder="8.0" />
-          </label>
-          <label>GitHubアクセストークン
-            <input id="rt-github-pat" type="password" placeholder="ghp_xxx... (localStorage のみ)" autocomplete="off" />
-          </label>
-          <div class="runtime-actions">
-            <button id="rt-save-btn" type="button">保存</button>
-            <button id="rt-reload-btn" type="button">再取得</button>
-            <span id="rt-status" class="rt-status"></span>
-          </div>
-        </div>
-        <pre id="runtime-raw" class="raw-file">(再読み込みで取得されます)</pre>
-      </div>
-
-      <!-- ----- プロンプト ----- -->
-      <div class="settings-section">
-        <div class="settings-header">
-          <h3>プロンプト <span id="prompts-count" class="count"></span></h3>
-          <button id="prompt-new-btn" type="button" class="edit-link">+ 新規作成</button>
-        </div>
-        <p class="hint">
-          各プロンプトは1つのモデルに紐付きます。frontmatter の <code>model:</code> がパイプラインの設定を上書きします。
-        </p>
-        <div class="prompts-layout">
-          <div class="prompts-list">
-            <ul id="prompts-ul"></ul>
-            <p id="prompts-empty" class="empty">GitHubリポジトリを設定して再読み込みしてください。</p>
-          </div>
-          <div id="prompt-editor" class="prompt-editor" hidden>
-            <div class="prompt-editor-meta">
-              <label>ファイル名 (.md)
-                <input id="prompt-filename" type="text" placeholder="my_prompt.md" />
-              </label>
-              <label>説明
-                <input id="prompt-description" type="text" placeholder="このプロンプトが何をするか" />
-              </label>
-              <label>使用モデル
-                <select id="prompt-model"></select>
-              </label>
-              <label>temperature
-                <input id="prompt-temperature" type="number" min="0" max="2" step="0.1" value="0.0" />
-              </label>
-            </div>
-            <label class="prompt-body-label">本文(Markdown)
-              <textarea id="prompt-body" rows="14" spellcheck="false"></textarea>
+      <ol class="ordered-list" id="pipeline-list">
+        <li class="stage-item" data-stage="collect">
+          <div class="stage-main">
+            <span class="drag-handle">⋮⋮</span>
+            <label class="stage-toggle">
+              <input type="checkbox" checked onchange="toggleStageEnabled(this)" />
             </label>
-            <div class="prompt-actions">
-              <button id="prompt-save-btn" type="button">保存</button>
-              <button id="prompt-cancel-btn" type="button">キャンセル</button>
-              <button id="prompt-delete-btn" type="button" class="danger">削除</button>
-              <span id="prompt-status" class="rt-status"></span>
+            <span class="order-num">1</span>
+            <div class="order-main">
+              <div class="name">collect</div>
+              <div class="meta">stages.collectors.rss</div>
+            </div>
+            <div class="order-actions">
+              <button title="編集" onclick="alert('モック: ステージ設定を編集')">✎</button>
+              <button class="danger" title="削除" onclick="deleteStage(this)">🗑</button>
             </div>
           </div>
-        </div>
-      </div>
+        </li>
 
-      <!-- ----- パイプライン構成 ----- -->
-      <div class="settings-section">
-        <div class="settings-header">
-          <h3>パイプライン構成</h3>
-          <a id="pipe-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
-        </div>
-        <p class="hint">
-          ステージの順序変更・追加・削除ができます。各ステージの詳細設定は GitHub 上で編集してください。
-        </p>
-        <div id="pipeline-editor" class="pipeline-editor">
-          <ol id="pipeline-stages"></ol>
-          <div class="pipeline-add">
-            <select id="pipeline-add-select">
-              <option value="">— ステージ部品を選択 —</option>
-            </select>
-            <button id="pipeline-add-btn" type="button">+ 追加</button>
+        <li class="stage-item" data-stage="dedupe">
+          <div class="stage-main">
+            <span class="drag-handle">⋮⋮</span>
+            <label class="stage-toggle">
+              <input type="checkbox" checked onchange="toggleStageEnabled(this)" />
+            </label>
+            <span class="order-num">2</span>
+            <div class="order-main">
+              <div class="name">dedupe</div>
+              <div class="meta">stages.filters.keyword</div>
+            </div>
+            <div class="order-actions">
+              <button>✎</button>
+              <button class="danger" onclick="deleteStage(this)">🗑</button>
+            </div>
           </div>
-          <div class="pipeline-actions">
-            <button id="pipeline-save-btn" type="button">保存</button>
-            <button id="pipeline-reset-btn" type="button">変更を破棄</button>
-            <span id="pipeline-status" class="rt-status"></span>
-          </div>
-        </div>
-        <details>
-          <summary>raw pipeline.yml を表示</summary>
-          <pre id="pipeline-raw" class="raw-file">(再読み込みで取得されます)</pre>
-        </details>
-      </div>
+        </li>
 
-      <!-- ----- RSSソース ----- -->
-      <div class="settings-section">
-        <div class="settings-header">
-          <h3>RSSソース <span id="src-count" class="count"></span></h3>
-          <a id="src-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
-        </div>
-        <div class="settings-controls">
-          <label>カテゴリ
-            <select id="src-category-filter">
-              <option value="">(すべて)</option>
+        <li class="stage-item" data-stage="filter">
+          <div class="stage-main">
+            <span class="drag-handle">⋮⋮</span>
+            <label class="stage-toggle">
+              <input type="checkbox" checked onchange="toggleStageEnabled(this)" />
+            </label>
+            <span class="order-num">3</span>
+            <div class="order-main">
+              <div class="name">filter</div>
+              <div class="meta">stages.filters.llm_score</div>
+            </div>
+            <div class="order-actions">
+              <button>✎</button>
+              <button class="danger" onclick="deleteStage(this)">🗑</button>
+            </div>
+          </div>
+          <!-- LLM系ステージは使用プロンプトを紐付け表示 -->
+          <div class="stage-prompt" onclick="go('prompt-edit')">
+            <span class="stage-prompt-icon">📝</span>
+            <div class="stage-prompt-main">
+              <div class="stage-prompt-name">filter_prompt.md</div>
+              <div class="stage-prompt-model">gemini-2.5-flash-lite ・ temp 0.0</div>
+            </div>
+            <span class="stage-prompt-edit">✎</span>
+          </div>
+        </li>
+
+        <li class="stage-item disabled-stage" data-stage="research">
+          <div class="stage-main">
+            <span class="drag-handle">⋮⋮</span>
+            <label class="stage-toggle">
+              <input type="checkbox" onchange="toggleStageEnabled(this)" />
+            </label>
+            <span class="order-num">4</span>
+            <div class="order-main">
+              <div class="name">research</div>
+              <div class="meta">stages.researchers.deep_research ・ スキップ中</div>
+            </div>
+            <div class="order-actions">
+              <button>✎</button>
+              <button class="danger" onclick="deleteStage(this)">🗑</button>
+            </div>
+          </div>
+          <div class="stage-prompt" onclick="go('prompt-edit')">
+            <span class="stage-prompt-icon">📝</span>
+            <div class="stage-prompt-main">
+              <div class="stage-prompt-name">research_prompt.md</div>
+              <div class="stage-prompt-model">gpt-4o-deep-research ・ temp 0.3</div>
+            </div>
+            <span class="stage-prompt-edit">✎</span>
+          </div>
+        </li>
+
+        <li class="stage-item" data-stage="report">
+          <div class="stage-main">
+            <span class="drag-handle">⋮⋮</span>
+            <label class="stage-toggle">
+              <input type="checkbox" checked onchange="toggleStageEnabled(this)" />
+            </label>
+            <span class="order-num">5</span>
+            <div class="order-main">
+              <div class="name">report_markdown</div>
+              <div class="meta">stages.reporters.markdown</div>
+            </div>
+            <div class="order-actions">
+              <button>✎</button>
+              <button class="danger" onclick="deleteStage(this)">🗑</button>
+            </div>
+          </div>
+        </li>
+      </ol>
+
+      <!-- ステージ追加フォーム -->
+      <details class="section" id="pipeline-add-form" style="padding: 0;">
+        <summary style="padding: 14px; cursor: pointer; list-style: none; color: var(--accent); font-weight: 600;">
+          + ステージを追加
+        </summary>
+        <div style="padding: 0 14px 14px 14px;">
+          <label class="field">ID(英数とアンダースコア)
+            <input type="text" id="new-stage-id" placeholder="例: dedupe_extra" />
+          </label>
+          <label class="field">部品
+            <select id="new-stage-use">
+              <option value="stages.collectors.rss">[collector] RSS / Atom Collector</option>
+              <option value="stages.filters.keyword">[filter] Keyword / Dedupe Filter</option>
+              <option value="stages.filters.llm_score">[filter] LLM Contextual Scorer</option>
+              <option value="stages.researchers.deep_research">[researcher] Deep Research</option>
+              <option value="stages.reporters.markdown">[reporter] Markdown Report</option>
+              <option value="stages.reporters.json">[reporter] JSON Report</option>
+              <option value="stages.reporters.r2_upload">[reporter] Cloudflare R2 Upload</option>
             </select>
           </label>
-          <label>状態
-            <select id="src-status-filter">
-              <option value="">(すべて)</option>
-              <option value="enabled">有効のみ</option>
-              <option value="disabled">無効のみ</option>
-            </select>
-          </label>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="addStage()">追加</button>
+          </div>
         </div>
-        <table id="sources-table">
-          <thead><tr>
-            <th>id</th><th>名前</th><th>カテゴリ</th><th>via</th><th>有効</th><th>URL</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-        <p id="src-empty" class="empty">GitHubリポジトリを設定して再読み込みしてください。</p>
-      </div>
+      </details>
 
-      <!-- ----- 実行スケジュール ----- -->
-      <div class="settings-section">
-        <div class="settings-header">
-          <h3>実行スケジュール</h3>
-          <a id="jobs-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
-        </div>
-        <pre id="jobs-raw" class="raw-file">(再読み込みで取得されます)</pre>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="alert('モック: pipeline.yml を保存')">パイプラインを保存</button>
+        <button class="btn btn-secondary">変更を破棄</button>
       </div>
     </section>
+
+    <!-- ======================= プロンプト編集 ======================= -->
+    <section class="screen" data-screen="prompt-edit">
+      <h2 class="screen-title">プロンプト編集</h2>
+
+      <div class="section">
+        <label class="field">ファイル名
+          <input type="text" value="filter_prompt.md" />
+        </label>
+        <label class="field">説明
+          <input type="text" value="AI OSINT 文脈適合性スコアラ" />
+        </label>
+        <label class="field">モデル
+          <select>
+            <option selected>gemini-2.5-flash-lite (Google)</option>
+            <option>gemini-2.5-flash (Google)</option>
+            <option>gpt-4o-mini (OpenAI)</option>
+            <option>gpt-4o (OpenAI)</option>
+            <option>claude-sonnet-4-5 (Anthropic)</option>
+          </select>
+        </label>
+        <label class="field">temperature
+          <input type="number" value="0.0" min="0" max="2" step="0.1" />
+        </label>
+        <label class="field">本文 (Markdown)
+          <textarea>あなたは AI 業界 OSINT アシスタントです。
+ユーザー文脈に対する記事の「早期シグナル価値」を 0.0〜10.0 の浮動小数で
+厳格に評価し、JSON のみを返してください...</textarea>
+        </label>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary">保存</button>
+        <button class="btn btn-secondary" onclick="go('pipeline')">キャンセル</button>
+        <button class="btn btn-danger">削除</button>
+      </div>
+    </section>
+
+    <!-- ======================= RSS ソース ======================= -->
+    <section class="screen" data-screen="rss">
+      <h2 class="screen-title">RSSソース</h2>
+      <p class="screen-desc">左のスイッチで ON/OFF、行全体をタップで最新記事をプレビュー、✎ で編集。</p>
+
+      <!-- 新規追加フォーム(折りたたみ) -->
+      <details class="section" id="rss-add-form" style="padding: 0;">
+        <summary style="padding: 14px; cursor: pointer; list-style: none; color: var(--accent); font-weight: 600;">
+          + 新しいRSSソースを追加
+        </summary>
+        <div style="padding: 0 14px 14px 14px;">
+          <label class="field">ID(英数とハイフン)
+            <input type="text" placeholder="例: lab-google-deepmind" />
+          </label>
+          <label class="field">表示名
+            <input type="text" placeholder="例: Google DeepMind Blog" />
+          </label>
+          <label class="field">フィードURL
+            <input type="url" placeholder="https://deepmind.google/blog/rss.xml" />
+          </label>
+          <label class="field">カテゴリ
+            <select>
+              <option>policy</option>
+              <option>lab</option>
+              <option>papers</option>
+              <option>risk</option>
+              <option>business</option>
+              <option>newsletter</option>
+              <option>japan</option>
+            </select>
+          </label>
+          <label class="field">言語
+            <select>
+              <option>en</option>
+              <option>ja</option>
+            </select>
+          </label>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="alert('モック: 実装時はフィードURL の妥当性を確認してから sources.json にコミットします')">保存</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- RSS ソースリスト -->
+      <div class="rss-item expanded">
+        <div class="rss-head" onclick="toggleRssPreview(this)">
+          <div class="rss-toggle on" onclick="event.stopPropagation(); this.classList.toggle('on');"></div>
+          <div class="rss-main">
+            <div class="name">policy-eu-commission-ai</div>
+            <div class="url">news.google.com/rss/search?q=EU+AI+Act...</div>
+          </div>
+          <div class="rss-actions">
+            <button title="編集" onclick="event.stopPropagation();">✎</button>
+            <button title="削除" class="danger-btn" onclick="event.stopPropagation(); if(confirm('削除しますか?')) this.closest('.rss-item').remove();">🗑</button>
+            <span class="rss-chevron">▼</span>
+          </div>
+        </div>
+        <div class="rss-preview">
+          <div class="rss-preview-title">最新 5 件</div>
+          <div class="rss-preview-item">
+            <div class="t">EU AI Act Phase 2 施行スケジュール確定</div>
+            <div class="d">2026-04-08 09:12 ・ digital-strategy.ec.europa.eu</div>
+          </div>
+          <div class="rss-preview-item">
+            <div class="t">The Digital Services Act: 新しい執行ガイドライン</div>
+            <div class="d">2026-04-08 07:30 ・ digital-strategy.ec.europa.eu</div>
+          </div>
+          <div class="rss-preview-item">
+            <div class="t">General-Purpose AI Code of Practice 公開</div>
+            <div class="d">2026-04-07 14:45 ・ digital-strategy.ec.europa.eu</div>
+          </div>
+          <div class="rss-preview-item">
+            <div class="t">European AI Office 年次報告</div>
+            <div class="d">2026-04-07 10:20 ・ digital-strategy.ec.europa.eu</div>
+          </div>
+          <div class="rss-preview-item">
+            <div class="t">AI Act 施行の段階的スケジュール改訂</div>
+            <div class="d">2026-04-06 16:00 ・ digital-strategy.ec.europa.eu</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rss-item">
+        <div class="rss-head" onclick="toggleRssPreview(this)">
+          <div class="rss-toggle on" onclick="event.stopPropagation(); this.classList.toggle('on');"></div>
+          <div class="rss-main">
+            <div class="name">lab-openai</div>
+            <div class="url">openai.com/blog/rss.xml</div>
+          </div>
+          <div class="rss-actions">
+            <button onclick="event.stopPropagation();">✎</button>
+            <button class="danger-btn" onclick="event.stopPropagation(); if(confirm('削除しますか?')) this.closest('.rss-item').remove();">🗑</button>
+            <span class="rss-chevron">▼</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rss-item disabled">
+        <div class="rss-head" onclick="toggleRssPreview(this)">
+          <div class="rss-toggle" onclick="event.stopPropagation(); this.classList.toggle('on'); this.closest('.rss-item').classList.toggle('disabled');"></div>
+          <div class="rss-main">
+            <div class="name">newsletter-import-ai</div>
+            <div class="url">news.google.com/rss/search?q=Import+AI...</div>
+          </div>
+          <div class="rss-actions">
+            <button onclick="event.stopPropagation();">✎</button>
+            <button class="danger-btn" onclick="event.stopPropagation(); if(confirm('削除しますか?')) this.closest('.rss-item').remove();">🗑</button>
+            <span class="rss-chevron">▼</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= 接続設定 + アクセス制御 ======================= -->
+    <section class="screen" data-screen="connection">
+      <h2 class="screen-title">接続設定とアクセス制御</h2>
+      <p class="screen-desc">初回に1回だけ設定する値。普段は触りません。</p>
+
+      <div class="section">
+        <h3>配信先</h3>
+        <label class="field">配信URL (Cloudflare Worker)
+          <input type="url" value="https://agent-platform-distributor.s-i-rec070082.workers.dev" />
+        </label>
+      </div>
+
+      <div class="section">
+        <h3>GitHub 連携</h3>
+        <label class="field">リポジトリ
+          <input type="text" value="ikymbiz/app-news-api" />
+        </label>
+        <div style="padding: 12px; background: var(--panel-2); border-radius: 8px; margin-bottom: 10px;">
+          <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">GitHub 書込プロキシ</div>
+          <div class="status-ok" style="font-size: 14px; font-weight: 600;">
+            ✓ Cloudflare Worker 経由(トークン不要)
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+            PAT は Worker の secret (<code style="background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px;">GH_PAT</code>) に保持されます。ブラウザには保存されません。
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>🔒 アクセス制御</h3>
+        <div style="padding: 12px; background: var(--panel-2); border-radius: 8px; margin-bottom: 12px;">
+          <div style="font-size: 12px; color: var(--muted); margin-bottom: 4px;">現在の保護方式</div>
+          <div class="status-ok" style="font-size: 14px; font-weight: 600;">
+            ✓ Cloudflare Access(Zero Trust)
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+            この管理画面と書込 API の両方を Cloudflare Access で保護します。認証方法は Google/GitHub OAuth、許可は下記メールアドレスで管理。
+          </div>
+        </div>
+
+        <label class="field">許可するメールアドレス(複数可、カンマ区切り)
+          <input type="text" placeholder="you@example.com, colleague@example.com" />
+        </label>
+
+        <label class="field">ID プロバイダ
+          <select>
+            <option>Google</option>
+            <option>GitHub</option>
+            <option>One-time PIN (email)</option>
+          </select>
+        </label>
+
+        <div class="btn-row">
+          <button class="btn btn-primary">Cloudflare Access を適用</button>
+        </div>
+      </div>
+    </section>
+
   </main>
 
-  <footer><small>agent-platform admin — static SPA</small></footer>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-  <script src="app.js" type="module"></script>
+  <script>
+    function go(screen) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      const target = document.querySelector(`.screen[data-screen="${screen}"]`);
+      if (target) target.classList.add("active");
+      document.body.dataset.screen = screen;
+      const titles = {
+        home: "Agent Platform",
+        news: "ニュース",
+        score: "スコア分布",
+        runs: "実行履歴",
+        cost: "コスト",
+        schedule: "スケジュール",
+        pipeline: "パイプライン",
+        "prompt-edit": "プロンプト編集",
+        rss: "RSSソース",
+        connection: "接続設定",
+      };
+      document.getElementById("header-title").textContent = titles[screen] || "Agent Platform";
+      window.scrollTo(0, 0);
+    }
+    function goHome() { go("home"); }
+
+    function toggleRssPreview(headEl) {
+      const item = headEl.closest(".rss-item");
+      item.classList.toggle("expanded");
+    }
+
+    // ============ パイプライン: 処理ON/OFF, 削除, 追加, 並替 ============
+    function toggleStageEnabled(cb) {
+      const item = cb.closest(".stage-item");
+      if (cb.checked) {
+        item.classList.remove("disabled-stage");
+        // strip "・ スキップ中" from meta if present
+        const meta = item.querySelector(".meta");
+        if (meta) meta.textContent = meta.textContent.replace(/\s*・\s*スキップ中$/, "");
+      } else {
+        item.classList.add("disabled-stage");
+        const meta = item.querySelector(".meta");
+        if (meta && !/スキップ中/.test(meta.textContent)) {
+          meta.textContent += " ・ スキップ中";
+        }
+      }
+    }
+
+    function deleteStage(btn) {
+      const item = btn.closest(".stage-item");
+      const name = item.querySelector(".name")?.textContent || "このステージ";
+      if (!confirm(`${name} を削除しますか?`)) return;
+      item.remove();
+      renumberStages();
+    }
+
+    function addStage() {
+      const id = (document.getElementById("new-stage-id").value || "").trim();
+      const use = document.getElementById("new-stage-use").value;
+      if (!/^[a-z0-9_]+$/.test(id)) {
+        alert("ID は小文字英数とアンダースコアのみ");
+        return;
+      }
+      const list = document.getElementById("pipeline-list");
+      const li = document.createElement("li");
+      li.className = "stage-item";
+      li.dataset.stage = id;
+      li.innerHTML = `
+        <div class="stage-main">
+          <span class="drag-handle">⋮⋮</span>
+          <label class="stage-toggle">
+            <input type="checkbox" checked onchange="toggleStageEnabled(this)" />
+          </label>
+          <span class="order-num">?</span>
+          <div class="order-main">
+            <div class="name">${id}</div>
+            <div class="meta">${use}</div>
+          </div>
+          <div class="order-actions">
+            <button>✎</button>
+            <button class="danger" onclick="deleteStage(this)">🗑</button>
+          </div>
+        </div>
+      `;
+      list.appendChild(li);
+      renumberStages();
+      document.getElementById("new-stage-id").value = "";
+      document.getElementById("pipeline-add-form").open = false;
+    }
+
+    function renumberStages() {
+      const items = document.querySelectorAll("#pipeline-list .stage-item");
+      items.forEach((it, i) => {
+        const num = it.querySelector(".order-num");
+        if (num) num.textContent = String(i + 1);
+      });
+    }
+
+    // Initialize SortableJS for drag-reorder once pipeline view exists in DOM
+    document.addEventListener("DOMContentLoaded", () => {
+      const list = document.getElementById("pipeline-list");
+      if (list && window.Sortable) {
+        Sortable.create(list, {
+          handle: ".drag-handle",
+          animation: 150,
+          ghostClass: "sortable-ghost",
+          chosenClass: "sortable-chosen",
+          onEnd: renumberStages,
+        });
+      }
+    });
+
+    // ============ Score histogram (bin width 0.1, 100 buckets) ============
+    // BUCKETS[i] holds the count of articles whose score is in [i*0.1, (i+1)*0.1).
+    // Bucket index 100 (score == 10.0) is folded into index 99.
+    const BIN_WIDTH = 0.1;
+    const N_BINS = 100;
+    let SCORE_BUCKETS = null; // Array(100) of integers, populated by loadScoreData()
+
+    function buildEmptyBuckets() {
+      // Placeholder distribution so the UI is not blank before data loads:
+      // a smooth bell-ish curve peaked around 6.5 with total ~1239.
+      const a = new Array(N_BINS).fill(0);
+      for (let i = 0; i < N_BINS; i++) {
+        const x = i * BIN_WIDTH + BIN_WIDTH / 2;
+        const peak = 6.5;
+        const sigma = 1.4;
+        const y = Math.exp(-((x - peak) ** 2) / (2 * sigma * sigma));
+        a[i] = Math.round(y * 65);
+      }
+      return a;
+    }
+
+    function renderHistogram() {
+      const container = document.getElementById("vhist-bars");
+      if (!container) return;
+      if (!SCORE_BUCKETS) SCORE_BUCKETS = buildEmptyBuckets();
+      const max = Math.max(1, ...SCORE_BUCKETS);
+      // Preserve the threshold line element (re-inserted after rebuild)
+      const thrLine = document.getElementById("thr-line");
+      container.innerHTML = "";
+      for (let i = 0; i < N_BINS; i++) {
+        const group = document.createElement("div");
+        group.className = "vhist-bar-group";
+        const bar = document.createElement("div");
+        bar.className = "vhist-bar";
+        const h = (SCORE_BUCKETS[i] / max) * 100;
+        bar.style.height = Math.max(SCORE_BUCKETS[i] > 0 ? 2 : 0, h) + "%";
+        if (SCORE_BUCKETS[i] === 0) bar.classList.add("low");
+        group.appendChild(bar);
+        container.appendChild(group);
+      }
+      if (thrLine) container.appendChild(thrLine);
+      // Update total in title
+      const total = SCORE_BUCKETS.reduce((s, n) => s + n, 0);
+      const titleEl = container.parentElement.querySelector(".vhist-title");
+      if (titleEl) titleEl.textContent = `記事数 / スコア帯(全${total}件)`;
+      // Apply current threshold colors
+      const thrInput = document.querySelector('.threshold-slider input[type="range"]');
+      if (thrInput) updateThreshold(thrInput.value);
+    }
+
+    function updateThreshold(val) {
+      const v = parseFloat(val);
+      document.getElementById("thr-val").textContent = v.toFixed(1);
+      // 100 equal-width buckets covering [0, 10]. Threshold position is v/10.
+      const pct = (v / 10) * 100;
+      const thrLine = document.getElementById("thr-line");
+      if (thrLine) thrLine.style.left = pct + "%";
+      document.querySelector(".vhist-threshold-label").textContent = "★ " + v.toFixed(1);
+      // Above-threshold count: sum of buckets whose lower edge >= v
+      // Bucket i covers [i*0.1, (i+1)*0.1); we want score >= v.
+      // Use the bucket whose center is >= v, i.e. i*0.1 + 0.05 >= v -> i >= (v - 0.05) / 0.1.
+      const firstAbove = Math.max(0, Math.ceil((v - BIN_WIDTH / 2) / BIN_WIDTH));
+      let count = 0;
+      if (SCORE_BUCKETS) {
+        for (let i = firstAbove; i < N_BINS; i++) count += SCORE_BUCKETS[i];
+      }
+      const cEl = document.getElementById("thr-count");
+      if (cEl) cEl.textContent = count;
+      // Recolor bars
+      const bars = document.querySelectorAll("#vhist-bars .vhist-bar");
+      bars.forEach((b, i) => {
+        if (i >= firstAbove) b.classList.add("above-thr");
+        else b.classList.remove("above-thr");
+      });
+    }
+
+    // ============ Data loaders (best-effort, fall back silently to placeholder) ============
+    // Public R2 base URL is configured by the user on the 接続設定 screen.
+    // Until then we try same-origin /news/... which Cloudflare Worker maps to R2.
+    function r2Base() {
+      try { return localStorage.getItem("r2_base") || ""; } catch (_) { return ""; }
+    }
+
+    async function loadScoreData() {
+      try {
+        const base = r2Base();
+        const url = (base ? base.replace(/\/+$/, "") : "") + "/news/current_news.json";
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) return;
+        const data = await r.json();
+        const items = Array.isArray(data) ? data : (data.items || data.articles || []);
+        const buckets = new Array(N_BINS).fill(0);
+        for (const it of items) {
+          const score = typeof it.score === "number" ? it.score
+                       : typeof it.relevance === "number" ? it.relevance : null;
+          if (score == null) continue;
+          let idx = Math.floor(score / BIN_WIDTH);
+          if (idx < 0) idx = 0;
+          if (idx >= N_BINS) idx = N_BINS - 1;
+          buckets[idx] += 1;
+        }
+        SCORE_BUCKETS = buckets;
+        renderHistogram();
+      } catch (_) { /* keep placeholder */ }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      renderHistogram();
+      loadScoreData();
+    });
+  </script>
 </body>
 </html>

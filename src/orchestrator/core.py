@@ -184,6 +184,7 @@ class StageSpec:
     use: str
     depends_on: list[str] = field(default_factory=list)
     when: str | None = None
+    enabled: bool = True  # pipeline.yml の `enabled: false` で UI からステージを無効化可能
     parallel: bool = False
     fan_out: str | None = None
     checkpoint: bool = True
@@ -207,6 +208,7 @@ def load_pipeline(doc: Mapping[str, Any]) -> Pipeline:
             use=s["use"],
             depends_on=list(s.get("depends_on", []) or []),
             when=s.get("when"),
+            enabled=bool(s.get("enabled", True)),
             parallel=bool(s.get("parallel", False)),
             fan_out=s.get("fan_out"),
             checkpoint=bool(s.get("checkpoint", True)),
@@ -285,6 +287,10 @@ class DagExecutor:
             with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
                 futures: dict[Future[StageOutput[Any]], StageSpec] = {}
                 for spec in layer:
+                    # enabled: false → UI からの無効化(SKIPPED として記録)
+                    if not spec.enabled:
+                        outputs[spec.id] = StageOutput(status=StageStatus.SKIPPED)
+                        continue
                     # when 式評価
                     if spec.when and not self._evaluate_when(spec.when, outputs):
                         outputs[spec.id] = StageOutput(status=StageStatus.SKIPPED)

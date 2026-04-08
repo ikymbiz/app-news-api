@@ -23,6 +23,26 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(env) });
     }
 
+    // ---- Admin SPA → GitHub Contents proxy ----
+    // Cloudflare Access が前段にある前提で Cf-Access-Authenticated-User-Email を検証する。
+    // 直接アクセス(Access bypass)で穴が空かないよう、SPA から呼ばれる /api/github/* は
+    // ヘッダ未付与なら 401。許可メールリスト ACCESS_ALLOWED_EMAILS を任意で併用できる。
+    if (url.pathname.startsWith("/api/github/")) {
+      const guard = checkAccess(request, env);
+      if (guard) return guard;
+      try {
+        if (method === "GET" && url.pathname === "/api/github/read") {
+          return await githubRead(url, env);
+        }
+        if (method === "POST" && url.pathname === "/api/github/write") {
+          return await githubWrite(request, env);
+        }
+        return json({ error: "method not allowed" }, 405, env);
+      } catch (err) {
+        return json({ error: String(err && err.message || err) }, 500, env);
+      }
+    }
+
     // Parse path: /<app>/<rest...>
     const parts = url.pathname.replace(/^\/+/, "").split("/");
     if (parts.length < 2 || !parts[0] || !parts[1]) {
@@ -120,8 +140,8 @@ function isAllowedApp(app, env) {
 function corsHeaders(env) {
   return {
     "Access-Control-Allow-Origin": env.CORS_ORIGIN || "*",
-    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-    "Access-Control-Allow-Headers": "If-None-Match, Content-Type",
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "If-None-Match, Content-Type, Cf-Access-Authenticated-User-Email",
     "Access-Control-Expose-Headers": "ETag, X-Artifact-Checksum, Last-Modified",
   };
 }
@@ -147,4 +167,151 @@ function json(obj, status, env, extra) {
       ...(extra || {}),
     },
   });
+}
+
+// --------------------------------------------------------------------------- //
+// GitHub Contents API proxy (Admin SPA → secrets.GH_PAT)
+// --------------------------------------------------------------------------- //
+
+// Cloudflare Access の前段保護を検証する。Access が前にある場合は
+// Cf-Access-Authenticated-User-Email ヘッダがリクエストに付与される。
+// ACCESS_ALLOWED_EMAILS が定義されていれば追加で照合する(防御の二層目)。
+// 戻り値: ガード失敗時は Response、成功時は null。
+function checkAccess(request, env) {
+  const email = request.headers.get("Cf-Access-Authenticated-User-Email") || "";
+  if (!email) {
+    return json(
+      { error: "unauthenticated: Cloudflare Access header missing" },
+      401,
+      env,
+    );
+  }
+  const allowed = (env.ACCESS_ALLOWED_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (allowed.length > 0 && !allowed.includes(email.toLowerCase())) {
+    return json({ error: `forbidden: ${email} not in allowlist` }, 403, env);
+  }
+  return null;
+}
+
+function ghRepo(env) {
+  const repo = env.GH_REPO || "";
+  if (!/^[^/\s]+\/[^/\s]+$/.test(repo)) {
+    throw new Error("env.GH_REPO must be set as 'owner/name'");
+  }
+  return repo;
+}
+
+function ghHeaders(env) {
+  if (!env.GH_PAT) throw new Error("env.GH_PAT secret is not configured");
+  return {
+    "Authorization": `Bearer ${env.GH_PAT}`,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "agent-platform-worker/1.0",
+  };
+}
+
+function ghBranch(env) {
+  return env.GH_BRANCH || "main";
+}
+
+// path クエリは "config/sources.json" のようなリポジトリ相対パス。
+// 安全のため `..` や絶対パスを拒否する。
+function safeRepoPath(p) {
+  if (!p || typeof p !== "string") throw new Error("path is required");
+  if (p.startsWith("/") || p.includes("..") || p.includes("\\")) {
+    throw new Error(`unsafe path: ${p}`);
+  }
+  return p;
+}
+
+async function githubRead(url, env) {
+  const path = safeRepoPath(url.searchParams.get("path"));
+  const repo = ghRepo(env);
+  const branch = ghBranch(env);
+  const api = `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?ref=${encodeURIComponent(branch)}`;
+  const r = await fetch(api, { headers: ghHeaders(env) });
+  if (r.status === 404) {
+    return json({ error: "not found", path }, 404, env);
+  }
+  if (!r.ok) {
+    const body = await r.text();
+    return json({ error: "github read failed", status: r.status, body }, 502, env);
+  }
+  const data = await r.json();
+  // GitHub Contents API returns base64-encoded content
+  let content = "";
+  if (data && data.content) {
+    content = atob(data.content.replace(/\n/g, ""));
+  }
+  return json(
+    { path, sha: data && data.sha, size: data && data.size, content },
+    200,
+    env,
+  );
+}
+
+async function githubWrite(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (_) {
+    return json({ error: "invalid JSON body" }, 400, env);
+  }
+  const path = safeRepoPath(body.path);
+  const message = (body.message || `chore: update ${path} via admin SPA`).slice(0, 200);
+  if (typeof body.content !== "string") {
+    return json({ error: "content (string) is required" }, 400, env);
+  }
+  const repo = ghRepo(env);
+  const branch = ghBranch(env);
+  const api = `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`;
+
+  // Determine current sha (required for updates; omitted on create)
+  let sha = body.sha;
+  if (!sha) {
+    const head = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, {
+      headers: ghHeaders(env),
+    });
+    if (head.ok) {
+      const meta = await head.json();
+      sha = meta && meta.sha;
+    }
+  }
+
+  const payload = {
+    message,
+    branch,
+    // GitHub Contents API expects base64-encoded content
+    content: btoa(unescape(encodeURIComponent(body.content))),
+  };
+  if (sha) payload.sha = sha;
+
+  const put = await fetch(api, {
+    method: "PUT",
+    headers: { ...ghHeaders(env), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!put.ok) {
+    const errBody = await put.text();
+    return json(
+      { error: "github write failed", status: put.status, body: errBody },
+      502,
+      env,
+    );
+  }
+  const result = await put.json();
+  return json(
+    {
+      path,
+      sha: result && result.content && result.content.sha,
+      commit: result && result.commit && result.commit.sha,
+      committed_at: result && result.commit && result.commit.committer && result.commit.committer.date,
+    },
+    200,
+    env,
+  );
 }
