@@ -90,13 +90,14 @@ class TestTopologicalOrder:
     def test_news_pipeline_layering(self, repo_root):
         pipe = load_pipeline(yaml.safe_load((repo_root / "src/apps/news/pipeline.yml").read_text()))
         layers = topological_order(pipe)
-        layer_ids = [[s.id for s in L] for L in layers]
+        layer_ids = [sorted(s.id for s in L) for L in layers]
+        # After Phase 11, reporters depend on `filter` directly (not research)
+        # so research and the reporters all sit in the same layer.
         assert layer_ids == [
             ["collect"],
             ["dedupe"],
             ["filter"],
-            ["research"],
-            ["report_markdown", "report_json", "meta_export"],
+            ["meta_export", "report_json", "report_markdown", "research"],
             ["upload"],
         ], f"unexpected layers: {layer_ids}"
 

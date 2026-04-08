@@ -1,12 +1,14 @@
 {
   "$schema_version": "2.0",
-  "description": "AI OSINT source catalog for the news reference implementation. Updated to direct official URLs where available.",
+  "description": "AI OSINT source catalog for the news reference implementation. Categories follow the user-supplied taxonomy: policy / lab / papers / risk / business / newsletter / japan. The `category` field is propagated to the filter prompt via CollectedItem.raw.category so the LLM can apply category-specific scoring rubrics. For non-RSS sources, Google News RSS search with a site: filter is used as a proxy (marked with `via: google_news_proxy`).",
+
   "sources": [
     {
       "id": "policy-eu-commission-ai",
       "name": "European Commission - AI Policy",
       "category": "policy",
-      "feed_url": "https://digital-strategy.ec.europa.eu/en/news-redirect/rss.xml",
+      "feed_url": "https://news.google.com/rss/search?q=site:digital-strategy.ec.europa.eu+AI&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -14,7 +16,8 @@
       "id": "policy-oecd-ai",
       "name": "OECD AI Policy Observatory",
       "category": "policy",
-      "feed_url": "https://oecd.ai/en/wonk",
+      "feed_url": "https://news.google.com/rss/search?q=site:oecd.ai&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -22,7 +25,8 @@
       "id": "policy-nist-ai-rmf",
       "name": "NIST AI Risk Management Framework",
       "category": "policy",
-      "feed_url": "https://www.nist.gov/news-events/news/rss.xml",
+      "feed_url": "https://news.google.com/rss/search?q=%22NIST+AI+RMF%22+OR+%22AI+Risk+Management+Framework%22&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -30,7 +34,8 @@
       "id": "policy-uk-aisi",
       "name": "UK AI Safety Institute",
       "category": "policy",
-      "feed_url": "https://www.gov.uk/government/organisations/ai-safety-institute.atom",
+      "feed_url": "https://news.google.com/rss/search?q=site:aisi.gov.uk+OR+%22AI+Safety+Institute%22+UK&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -38,10 +43,12 @@
       "id": "policy-white-house-ostp",
       "name": "White House OSTP AI",
       "category": "policy",
-      "feed_url": "https://www.whitehouse.gov/ostp/news-updates/feed/",
+      "feed_url": "https://news.google.com/rss/search?q=site:whitehouse.gov+%22OSTP%22+AI&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
+
     {
       "id": "lab-openai-blog",
       "name": "OpenAI Blog",
@@ -62,7 +69,8 @@
       "id": "lab-anthropic-news",
       "name": "Anthropic News",
       "category": "lab",
-      "feed_url": "https://www.anthropic.com/news",
+      "feed_url": "https://news.google.com/rss/search?q=site:anthropic.com+OR+%22Anthropic%22+AI&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -82,6 +90,7 @@
       "language": "en",
       "enabled": true
     },
+
     {
       "id": "papers-arxiv-cs-ai",
       "name": "arXiv cs.AI",
@@ -110,15 +119,27 @@
       "id": "papers-with-code",
       "name": "Papers with Code - latest",
       "category": "papers",
-      "feed_url": "https://paperswithcode.com/latest",
+      "feed_url": "https://news.google.com/rss/search?q=site:paperswithcode.com&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
     {
+      "id": "papers-conferences",
+      "name": "NeurIPS / ICML / ICLR mentions",
+      "category": "papers",
+      "feed_url": "https://news.google.com/rss/search?q=%22NeurIPS+2026%22+OR+%22ICML+2026%22+OR+%22ICLR+2026%22&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
+      "language": "en",
+      "enabled": true
+    },
+
+    {
       "id": "risk-ai-incident-db",
       "name": "AI Incident Database",
       "category": "risk",
-      "feed_url": "https://incidentdatabase.ai/blog/rss.xml",
+      "feed_url": "https://news.google.com/rss/search?q=site:incidentdatabase.ai+OR+%22AI+Incident+Database%22&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -126,7 +147,8 @@
       "id": "risk-partnership-on-ai",
       "name": "Partnership on AI",
       "category": "risk",
-      "feed_url": "https://partnershiponai.org/feed/",
+      "feed_url": "https://news.google.com/rss/search?q=site:partnershiponai.org&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -134,7 +156,8 @@
       "id": "risk-cais",
       "name": "Center for AI Safety",
       "category": "risk",
-      "feed_url": "https://www.safe.ai/blog/rss.xml",
+      "feed_url": "https://news.google.com/rss/search?q=site:safe.ai+OR+%22Center+for+AI+Safety%22&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -142,7 +165,8 @@
       "id": "risk-mit-airisk",
       "name": "MIT AI Risk Repository",
       "category": "risk",
-      "feed_url": "https://airisk.mit.edu/",
+      "feed_url": "https://news.google.com/rss/search?q=site:airisk.mit.edu+OR+%22MIT+AI+Risk+Repository%22&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -150,10 +174,12 @@
       "id": "risk-openai-safety",
       "name": "OpenAI Safety",
       "category": "risk",
-      "feed_url": "https://openai.com/news/safety-and-alignment/rss.xml",
+      "feed_url": "https://news.google.com/rss/search?q=site:openai.com+safety&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
+
     {
       "id": "business-techcrunch-ai",
       "name": "TechCrunch AI",
@@ -166,7 +192,8 @@
       "id": "business-the-information",
       "name": "The Information - AI",
       "category": "business",
-      "feed_url": "https://www.theinformation.com/topics/artificial-intelligence",
+      "feed_url": "https://news.google.com/rss/search?q=site:theinformation.com+AI&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -174,7 +201,8 @@
       "id": "business-a16z",
       "name": "Andreessen Horowitz (a16z) AI",
       "category": "business",
-      "feed_url": "https://a16z.com/category/ai/feed/",
+      "feed_url": "https://news.google.com/rss/search?q=site:a16z.com+AI&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -186,11 +214,13 @@
       "language": "en",
       "enabled": true
     },
+
     {
       "id": "newsletter-import-ai",
       "name": "Import AI (Jack Clark)",
       "category": "newsletter",
-      "feed_url": "https://importai.substack.com/feed",
+      "feed_url": "https://news.google.com/rss/search?q=%22Import+AI%22+OR+%22Jack+Clark%22+Anthropic&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -198,7 +228,8 @@
       "id": "newsletter-the-batch",
       "name": "The Batch (DeepLearning.AI)",
       "category": "newsletter",
-      "feed_url": "https://www.deeplearning.ai/the-batch/rss/",
+      "feed_url": "https://news.google.com/rss/search?q=%22The+Batch%22+%22DeepLearning.AI%22&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
@@ -206,15 +237,18 @@
       "id": "newsletter-bens-bites",
       "name": "Ben's Bites",
       "category": "newsletter",
-      "feed_url": "https://www.bensbites.co/feed",
+      "feed_url": "https://news.google.com/rss/search?q=%22Ben%27s+Bites%22+AI&hl=en-US&gl=US&ceid=US:en",
+      "via": "google_news_proxy",
       "language": "en",
       "enabled": true
     },
+
     {
       "id": "japan-meti-ai",
       "name": "経済産業省 AI政策",
       "category": "japan",
-      "feed_url": "https://www.meti.go.jp/press/rss/press.xml",
+      "feed_url": "https://news.google.com/rss/search?q=site:meti.go.jp+AI&hl=ja&gl=JP&ceid=JP:ja",
+      "via": "google_news_proxy",
       "language": "ja",
       "enabled": true
     },
@@ -222,7 +256,8 @@
       "id": "japan-digital-agency",
       "name": "デジタル庁 AI戦略",
       "category": "japan",
-      "feed_url": "https://www.digital.go.jp/news/feed.xml",
+      "feed_url": "https://news.google.com/rss/search?q=site:digital.go.jp+AI&hl=ja&gl=JP&ceid=JP:ja",
+      "via": "google_news_proxy",
       "language": "ja",
       "enabled": true
     },
@@ -230,15 +265,17 @@
       "id": "japan-riken",
       "name": "理化学研究所",
       "category": "japan",
-      "feed_url": "https://www.riken.jp/pr/news/index.xml",
+      "feed_url": "https://news.google.com/rss/search?q=site:riken.jp+AI+OR+%E4%BA%BA%E5%B7%A5%E7%9F%A5%E8%83%BD&hl=ja&gl=JP&ceid=JP:ja",
+      "via": "google_news_proxy",
       "language": "ja",
       "enabled": true
     },
     {
       "id": "japan-ai-news-general",
-      "name": "ITmedia AI+",
+      "name": "Google News JP - AI 一般",
       "category": "japan",
-      "feed_url": "https://rss.itmedia.co.jp/rss/2.0/ai-plus.xml",
+      "feed_url": "https://news.google.com/rss/search?q=AI+OR+%E4%BA%BA%E5%B7%A5%E7%9F%A5%E8%83%BD&hl=ja&gl=JP&ceid=JP:ja",
+      "via": "google_news_proxy",
       "language": "ja",
       "enabled": true
     }

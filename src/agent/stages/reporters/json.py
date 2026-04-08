@@ -39,9 +39,13 @@ class StageImpl:
         output_path = Path(cfg.get("output_path", "artifacts/current.json"))
         schema_version = str(cfg.get("schema_version", "1.0"))
         max_chars = int(cfg.get("max_summary_chars", 4000))
+        max_items = int(cfg.get("max_items", 100))
 
         payload = inputs.payload or {}
-        items: list[dict[str, Any]] = list(payload.get("items", []))
+        all_items: list[dict[str, Any]] = list(payload.get("items", []))
+        # Sort by score (highest first) and cap to max_items so the
+        # distribution file stays small enough for client-side delta sync.
+        items = sorted(all_items, key=lambda x: float(x.get("score", 0)), reverse=True)[:max_items]
 
         try:
             doc = self._build_document(items, schema_version, max_chars, ctx.job_run_id)

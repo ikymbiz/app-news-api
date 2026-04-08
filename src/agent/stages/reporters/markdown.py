@@ -34,12 +34,14 @@ class StageImpl:
         cfg = dict(inputs.config)
         output_path = Path(cfg.get("output_path", "artifacts/report.md"))
         title_template = cfg.get("title_template", "Report - {{date}}")
+        max_items = int(cfg.get("max_items", 30))
+        high_value_threshold = float(cfg.get("high_value_threshold", 9.0))
 
         payload = inputs.payload or {}
         items: list[dict[str, Any]] = list(payload.get("items", []))
 
         try:
-            body = self._render(items, title_template)
+            body = self._render(items, title_template, max_items, high_value_threshold)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(body, encoding="utf-8")
         except Exception as e:  # noqa: BLE001
@@ -80,27 +82,51 @@ class StageImpl:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _render(items: list[dict[str, Any]], title_template: str) -> str:
+    def _render(items: list[dict[str, Any]], title_template: str,
+                max_items: int = 30, high_value_threshold: float = 9.0) -> str:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         title = title_template.replace("{{date}}", today)
         lines: list[str] = [f"# {title}", "", f"_Generated: {datetime.now(timezone.utc).isoformat()}_", ""]
         if not items:
-            lines.append("_No high-value items found._")
+            lines.append("_No items collected._")
             return "\n".join(lines) + "\n"
 
-        sorted_items = sorted(items, key=lambda x: float(x.get("score", 0)), reverse=True)
+        # Score distribution summary
+        scores = [float(it.get("score", 0)) for it in items]
+        buckets = {
+            "9.0+": sum(1 for s in scores if s >= 9.0),
+            "8.0-8.9": sum(1 for s in scores if 8.0 <= s < 9.0),
+            "7.0-7.9": sum(1 for s in scores if 7.0 <= s < 8.0),
+            "6.0-6.9": sum(1 for s in scores if 6.0 <= s < 7.0),
+            "5.0-5.9": sum(1 for s in scores if 5.0 <= s < 6.0),
+            "<5.0": sum(1 for s in scores if s < 5.0),
+        }
+        avg = sum(scores) / len(scores) if scores else 0.0
+        lines.append(f"**Items collected**: {len(items)} | **Avg score**: {avg:.2f} | **Showing top {min(max_items, len(items))}**")
+        lines.append("")
+        lines.append("**Score distribution:**")
+        for label, count in buckets.items():
+            if count > 0:
+                bar = "█" * min(40, count)
+                lines.append(f"- `{label:8s}` {count:4d}  {bar}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        sorted_items = sorted(items, key=lambda x: float(x.get("score", 0)), reverse=True)[:max_items]
         for idx, item in enumerate(sorted_items, 1):
-            lines.append(f"## {idx}. {item.get('title', '(untitled)')}")
+            score = float(item.get("score", 0))
+            badge = " ★" if score >= high_value_threshold else ""
+            lines.append(f"## {idx}.{badge} {item.get('title', '(untitled)')}  `[{score:.1f}]`")
             lines.append("")
             lines.append(f"- **Source**: {item.get('source', '-')}")
             lines.append(f"- **URL**: {item.get('url', '-')}")
-            lines.append(f"- **Score**: {item.get('score', '-')}")
             topics = item.get("topics", []) or []
             if topics:
                 lines.append(f"- **Topics**: {', '.join(topics)}")
             reason = item.get("reason")
             if reason:
-                lines.append(f"- **Filter Reason**: {reason}")
+                lines.append(f"- **Reason**: {reason}")
             lines.append("")
             summary = item.get("summary")
             if summary:

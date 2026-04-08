@@ -14,10 +14,14 @@
       <button data-view="stages" class="nav">Stages</button>
       <button data-view="cost" class="nav">Cost</button>
       <button data-view="artifacts" class="nav">Artifacts</button>
+      <button data-view="settings" class="nav">Settings</button>
     </nav>
     <div class="config">
       <label>Distributor URL
         <input id="distributor-url" type="url" placeholder="https://artifacts.example.invalid" />
+      </label>
+      <label>GitHub Repo
+        <input id="github-repo" type="text" placeholder="owner/repo (e.g. ikymbiz/app-news-api)" />
       </label>
       <label>App
         <select id="app-select"><option value="news">news</option></select>
@@ -86,6 +90,68 @@
         </tr></thead>
         <tbody></tbody>
       </table>
+    </section>
+
+    <section id="view-settings" class="view">
+      <h2>Configuration</h2>
+      <p class="hint">
+        These files live in the GitHub repo. To change a value, click <em>Edit on GitHub</em>
+        next to any section, modify it in the GitHub web editor, and commit. The next
+        <code>agent-platform</code> workflow run will pick up the change automatically.
+        No re-deploy or bootstrap needed.
+      </p>
+
+      <div class="settings-section">
+        <div class="settings-header">
+          <h3>RSS Sources <span id="src-count" class="count"></span></h3>
+          <a id="src-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+        </div>
+        <div class="settings-controls">
+          <label>Category filter
+            <select id="src-category-filter">
+              <option value="">(all)</option>
+            </select>
+          </label>
+          <label>Status filter
+            <select id="src-status-filter">
+              <option value="">(all)</option>
+              <option value="enabled">enabled only</option>
+              <option value="disabled">disabled only</option>
+            </select>
+          </label>
+        </div>
+        <table id="sources-table">
+          <thead><tr>
+            <th>id</th><th>name</th><th>category</th><th>via</th><th>enabled</th><th>URL</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        <p id="src-empty" class="empty">Set GitHub Repo above and click Refresh to load sources.</p>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-header">
+          <h3>Pipeline Definition (8 stages, DAG)</h3>
+          <a id="pipe-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+        </div>
+        <pre id="pipeline-raw" class="raw-file">(load by clicking Refresh)</pre>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-header">
+          <h3>Filter Prompt (Gemini scoring rubric)</h3>
+          <a id="prompt-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+        </div>
+        <pre id="prompt-raw" class="raw-file">(load by clicking Refresh)</pre>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-header">
+          <h3>Jobs / Schedule (cron)</h3>
+          <a id="jobs-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+        </div>
+        <pre id="jobs-raw" class="raw-file">(load by clicking Refresh)</pre>
+      </div>
     </section>
   </main>
 

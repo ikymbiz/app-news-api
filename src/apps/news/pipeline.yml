@@ -76,26 +76,29 @@ stages:
       include_citations: true
 
   - id: report_markdown
-    description: 人間可読な Markdown レポート生成
+    description: 人間可読な Markdown レポート生成(全スコア記事を score 順)
     use: stages.reporters.markdown
-    depends_on: [research]
+    depends_on: [filter]
     config:
       output_path: artifacts/news/current_report.md
       title_template: "Daily News Digest - {{date}}"
+      max_items: 30
+      high_value_threshold: 9.0
 
   - id: report_json
     description: 配信用 JSON(current_news.json)生成
     use: stages.reporters.json
-    depends_on: [research]
+    depends_on: [filter]
     config:
       output_path: artifacts/news/current_news.json
       schema_version: "1.0"
       max_summary_chars: 4000
+      max_items: 100
 
   - id: meta_export
     description: Firestore から直近ジョブ/ステージ/メトリクスを JSON ダンプ(Admin SPA 用)
     use: stages.reporters.meta_export
-    depends_on: [research]
+    depends_on: [filter]
     config:
       output_dir: artifacts/news/meta
       days: 30

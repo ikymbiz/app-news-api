@@ -197,3 +197,116 @@ footer {
   color: var(--muted);
   text-align: center;
 }
+
+/* ----- Settings view ----- */
+.settings-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.settings-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-header .count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: normal;
+  margin-left: 6px;
+}
+.edit-link {
+  background: var(--accent);
+  color: var(--bg);
+  padding: 6px 12px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.edit-link:hover { filter: brightness(1.15); }
+
+.settings-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.settings-controls label {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--muted);
+  gap: 4px;
+}
+
+#sources-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+#sources-table th,
+#sources-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+#sources-table tr.src-disabled {
+  opacity: 0.45;
+}
+.cat {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: var(--border);
+}
+.cat-policy   { background: #3b3a55; color: #c5b8ff; }
+.cat-lab      { background: #1f3a47; color: #7fd0ff; }
+.cat-papers   { background: #1e3d2d; color: #7fe0a8; }
+.cat-risk     { background: #4a2528; color: #ff9e9e; }
+.cat-business { background: #4a3a1c; color: #ffce7a; }
+.cat-newsletter { background: #2c2c4a; color: #b6c0ff; }
+.cat-japan    { background: #3a2547; color: #e0a8ff; }
+
+.raw-file {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+  color: var(--fg);
+}
+p.hint {
+  color: var(--muted);
+  font-size: 12px;
+  background: var(--panel);
+  border-left: 3px solid var(--accent);
+  padding: 10px 14px;
+  margin-bottom: 20px;
+  border-radius: 0 4px 4px 0;
+}
+p.hint code {
+  background: var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
