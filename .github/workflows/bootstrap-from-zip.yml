@@ -1,0 +1,132 @@
+name: bootstrap-from-zip
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      zip_url:
+        description: "Direct URL to the zip to extract (overrides release asset)"
+        required: false
+        default: ""
+      asset_name:
+        description: "Release asset filename to fetch"
+        required: false
+        default: "agent-platform-step10.zip"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-from-zip
+  cancel-in-progress: false
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout current repo state
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve zip URL
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          input_url="${{ github.event.inputs.zip_url }}"
+          asset_name="${{ github.event.inputs.asset_name }}"
+          if [ -z "${asset_name}" ]; then asset_name="agent-platform-step10.zip"; fi
+
+          if [ -n "${input_url}" ]; then
+            echo "url=${input_url}" >> "$GITHUB_OUTPUT"
+            echo "Using user-provided URL: ${input_url}"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            release_tag="${{ github.event.release.tag_name }}"
+            url=$(gh release view "${release_tag}" --json assets \
+                  --jq ".assets[] | select(.name == \"${asset_name}\") | .url")
+            if [ -z "${url}" ]; then
+              echo "No asset named ${asset_name} found in release ${release_tag}." >&2
+              exit 1
+            fi
+            echo "url=${url}" >> "$GITHUB_OUTPUT"
+            echo "Resolved release asset URL for ${asset_name}"
+            exit 0
+          fi
+
+          url=$(gh release view --json assets \
+                --jq ".assets[] | select(.name == \"${asset_name}\") | .url" || true)
+          if [ -z "${url}" ]; then
+            echo "Could not resolve a zip to extract. Provide zip_url input or attach ${asset_name} to a release." >&2
+            exit 1
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Download zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p _bootstrap
+          if [[ "${{ steps.resolve.outputs.url }}" == *api.github.com* ]]; then
+            gh api "${{ steps.resolve.outputs.url }}" \
+              -H "Accept: application/octet-stream" > _bootstrap/payload.zip
+          else
+            curl -sSL -o _bootstrap/payload.zip "${{ steps.resolve.outputs.url }}"
+          fi
+          file _bootstrap/payload.zip
+          unzip -tq _bootstrap/payload.zip
+          echo "Zip integrity OK ($(stat -c%s _bootstrap/payload.zip) bytes)"
+
+      - name: Preserve bootstrap workflow and extract zip at repo root
+        run: |
+          set -euo pipefail
+          cp .github/workflows/bootstrap-from-zip.yml _bootstrap/bootstrap-from-zip.yml
+
+          find . -mindepth 1 -maxdepth 1 \
+            ! -name ".git" \
+            ! -name "_bootstrap" \
+            -exec rm -rf {} +
+
+          unzip -q _bootstrap/payload.zip -d .
+
+          mkdir -p .github/workflows
+          cp _bootstrap/bootstrap-from-zip.yml .github/workflows/bootstrap-from-zip.yml
+
+          rm -rf _bootstrap
+
+          echo "Top-level entries after extraction:"
+          ls -la
+
+      - name: Commit and force-push to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "agent-platform-bootstrap[bot]"
+          git config user.email "bootstrap@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit. Repo already matches the zip."
+            exit 0
+          fi
+          git commit -m "bootstrap: extract agent platform from zip release"
+          git push --force origin HEAD:main
+
+      - name: Summary
+        run: |
+          {
+            echo "## Bootstrap completed"
+            echo ""
+            echo "Repo populated from zip release. Top-level entries:"
+            echo ""
+            echo '```'
+            ls -la
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
