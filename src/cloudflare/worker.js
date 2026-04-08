@@ -43,6 +43,30 @@ export default {
       }
     }
 
+    // ---- Admin SPA → non-secret config readback ----
+    if (url.pathname === "/api/config" && method === "GET") {
+      const guard = checkAccess(request, env);
+      if (guard) return guard;
+      return json({
+        GH_REPO: env.GH_REPO || "",
+        GH_BRANCH: env.GH_BRANCH || "main",
+        ALLOWED_APPS: env.ALLOWED_APPS || "news",
+        ACCESS_ALLOWED_EMAILS: env.ACCESS_ALLOWED_EMAILS || "",
+        // GH_PAT is never returned.
+      }, 200, env);
+    }
+
+    // ---- Admin SPA → RSS feed preview proxy (CORS bypass) ----
+    if (url.pathname === "/api/rss/preview" && method === "GET") {
+      const guard = checkAccess(request, env);
+      if (guard) return guard;
+      try {
+        return await rssPreview(url, env);
+      } catch (err) {
+        return json({ error: String(err && err.message || err) }, 500, env);
+      }
+    }
+
     // Parse path: /<app>/<rest...>
     const parts = url.pathname.replace(/^\/+/, "").split("/");
     if (parts.length < 2 || !parts[0] || !parts[1]) {
@@ -314,4 +338,61 @@ async function githubWrite(request, env) {
     200,
     env,
   );
+}
+
+// --------------------------------------------------------------------------- //
+// RSS feed preview (server-side fetch + minimal XML parse)
+// --------------------------------------------------------------------------- //
+
+async function rssPreview(url, env) {
+  const target = url.searchParams.get("url");
+  if (!target || !/^https:\/\//i.test(target)) {
+    return json({ error: "url must start with https://" }, 400, env);
+  }
+  const r = await fetch(target, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; agent-platform-preview/1.0)",
+      "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+    },
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!r.ok) {
+    return json({ error: `upstream HTTP ${r.status}`, url: target }, 502, env);
+  }
+  const xml = await r.text();
+  const items = parseFeedItems(xml).slice(0, 5);
+  return json({ url: target, items }, 200, env);
+}
+
+// 最低限の RSS 2.0 / Atom 抽出。<item>...</item> または <entry>...</entry> のブロック内
+// から <title>, <pubDate>/<published>/<updated> を取得する。XML パーサは Workers ランタイムに
+// 標準では無いので、正規表現で割り切る(プレビュー用途、5件しか返さない)。
+function parseFeedItems(xml) {
+  const items = [];
+  const blockRe = /<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  let m;
+  while ((m = blockRe.exec(xml)) !== null && items.length < 20) {
+    const block = m[2];
+    items.push({
+      title: extractTag(block, "title"),
+      published: extractTag(block, "pubDate") || extractTag(block, "published")
+                 || extractTag(block, "updated") || extractTag(block, "dc:date") || "",
+    });
+  }
+  return items;
+}
+
+function extractTag(block, tag) {
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
+  const m = block.match(re);
+  if (!m) return "";
+  let v = m[1].trim();
+  // strip CDATA
+  v = v.replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i, "$1");
+  // strip HTML tags
+  v = v.replace(/<[^>]+>/g, "").trim();
+  // unescape entities (minimal)
+  v = v.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+       .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  return v;
 }

@@ -1,6 +1,137 @@
 # HANDOVER: Current Status & Next Steps
 
-最終更新: 2026-04-08(Phase 15 v4 本番実装着手)
+最終更新: 2026-04-08(Phase 16 Admin SPA 実データ接続 + R2 重複処理)
+
+---
+
+## Phase 16 — Admin SPA 実データ接続 & R2 重複処理
+
+ユーザ指示: 「エージェントプラットフォームはモックのままのようだ。実際のデータを使え」 + 「R2 には重複したデータがありそうだから、毎回重複する記事がないか確認し、削除、スキップをする処理を追加すること」。
+
+Phase 15 で v4 モックを `src/admin/index.html` にコピーしたが、本文は依然としてハードコードされたサンプルデータのままだった。本セッションで以下を実装。
+
+### 16.1 Admin SPA を実データ駆動に全面書換
+
+`src/admin/index.html` の `<body>` と `<script>` をほぼ完全に書き直した。
+
+**共通基盤**:
+- `localStorage.ap_r2_base` / `ap_worker_base` で配信URLと書込APIのURLを保持(接続設定画面で編集)
+- `fetchR2(path)`: R2 公開URL から JSON/text を取得
+- `fetchGH(path)`: Worker `/api/github/read?path=...` 経由で GitHub Contents を取得(`{path, sha, size, content}` を返す)
+- `writeGH(path, content, message, sha)`: Worker `/api/github/write` 経由で commit
+- いずれも `credentials: include` で Cloudflare Access Cookie を送信
+- 各画面に loading / empty / error の3状態テンプレ(`.empty-state` クラス)
+- `js-yaml` 4.1.0 を `src/admin/vendor/js-yaml.min.js` として同梱(39KB)
+- ナビゲーションは lazy load: `go(screen)` のたびに対応する `loadXxx()` が走る
+
+**画面別の実データソース**:
+
+| 画面 | 読込 | 書込 |
+|---|---|---|
+| ニュース | R2 `news/current_news.json` | — |
+| スコア分布 | R2 `news/current_news.json`(ヒストグラム)+ GitHub `config/runtime.json`(取得条件) | GitHub `config/runtime.json` |
+| 実行履歴 | R2 `news/meta/runs.json` | — |
+| コスト | R2 `news/meta/metrics.json` | — |
+| スケジュール | GitHub `config/jobs.yml`(js-yaml で parse) | GitHub `config/jobs.yml`(js-yaml で dump) |
+| パイプライン | GitHub `src/apps/news/pipeline.yml` | GitHub 同 |
+| プロンプト編集 | GitHub `<stage.config.prompt_file>` | GitHub 同 |
+| RSS ソース | GitHub `config/sources.json` | GitHub 同 |
+| RSS プレビュー | Worker `/api/rss/preview?url=...` | — |
+| 接続設定 | Worker `/api/config`(read-only)+ localStorage | localStorage |
+
+**画面別の主な機能**:
+- **ニュース**: カテゴリは `items[].category` から動的に生成。フィルタ(最低スコア・カテゴリ・並び順)と並び順切替はクライアント側。記事タイトルは `item.url` リンク化
+- **スコア分布**: ヒストグラムは前 Phase の100ビン(ビン幅0.1)を維持。`loadScore()` が runtime.json から閾値・取得期間・日付不明除外を読んで UI に反映、`saveScoreConfig()` が `config/runtime.json` に書戻し(commit ハッシュをトースト表示)
+- **パイプライン**: ステージリストは `pipeline.yml` から生成。`enabled` フラグ ↔ チェックボックスの双方向バインド。SortableJS ドラッグで `PIPELINE_DOC.doc.stages` 配列を入替え、`dirty` フラグを立てる。「保存」前に DAG sanity check(全 `depends_on` が存在するステージか)、通れば `pipeline.yml` 全体を `js-yaml.dump()` で再シリアライズして PUT
+- **ステージ削除**: 削除時に他ステージの `depends_on` から該当 ID も自動除去
+- **プロンプト編集**: ステージカードのプロンプトをタップ → `prompt_file` を `fetchGH()` → textarea にロード → 編集 → 保存
+- **RSS**: トグル/追加/削除で `sources.json` 配列を更新して即 PUT。プレビューは行展開時に Worker プロキシ経由で初回のみ取得(以後キャッシュ)
+- **スケジュール**: cron 式入力で追加(分・時のフォームは廃止して cron 直入力に変更 — シンプル化)
+- **接続設定**: クライアント側設定のみ編集可。サーバ側 env(GH_REPO 等)は `/api/config` から読取専用表示
+
+### 16.2 Worker に3エンドポイント追加
+
+`src/cloudflare/worker.js`:
+- **`GET /api/config`** — non-secret な env(`GH_REPO`, `GH_BRANCH`, `ALLOWED_APPS`, `ACCESS_ALLOWED_EMAILS`)を返す。`GH_PAT` は絶対に返さない。Cloudflare Access ヘッダ検証あり
+- **`GET /api/rss/preview?url=...`** — server-side で feed を fetch(`https://` のみ許可、CF cache 5分)して `<item>`/`<entry>` ブロックを正規表現抽出。`title` と `pubDate`/`published`/`updated`/`dc:date` を取り出し、CDATA・HTML タグ・基本 HTML エンティティを処理して上位5件を返す
+- 既存の `/api/github/read|write` と同じ `checkAccess()` ガード適用
+
+### 16.3 R2 重複検知ステージ追加
+
+**`src/agent/stages/filters/r2_dedupe.py`**(新規、auto-discover されるので registry 改修不要)
+
+判定キー(2段):
+1. **一次**: `_normalize_url()` 後の URL 完全一致(フラグメントと末尾スラッシュ除去)
+2. **二次**: `SHA-256(title.lower() + '\\0' + source.lower())` の hex(URL がトラッキングパラメータで揺れるケースの保険)
+
+3つのモード(`config.mode`):
+- **`skip`**(デフォルト): 重複した *新規* items を出力から除外
+- **`delete`**: 新規側を残す。次段の reporter が `current_news.json` を上書きすることで結果的に古い側の重複が消える
+- **`report_only`**: 全件 pass-through、メトリクスとレポートのみ記録
+
+R2 アクセスは boto3(reporters.r2_upload と同方式)。boto3 未導入・バケット未設定・オブジェクト不在のいずれも致命扱いせず空配列で続行(初回実行を想定)。
+
+成果物:
+- `ctx.record_metric()` で `r2_dedupe.in / duplicates / out` を記録
+- `config.report_path`(任意、デフォルト `artifacts/news/meta/dedup_report.json`)に重複サンプル20件まで含むレポートを出力
+
+**重要**: 新ステージは `pipeline.yml` には**まだ追加していない**。次セッションで Admin SPA のパイプライン画面から(または手動で)追加する。pipeline.yml への追加例:
+
+```yaml
+  - id: r2_dedupe
+    use: stages.filters.r2_dedupe
+    depends_on: [filter]
+    config:
+      mode: skip
+      bucket: agent-platform-artifacts
+      key: news/current_news.json
+```
+
+そして既存の `report_json` の `depends_on` を `[filter]` から `[r2_dedupe]` に変更する。
+
+### 16.4 既存 R2 データ用ワンショット掃除スクリプト
+
+**`scripts/r2_dedupe_cleanup.py`** — `r2_dedupe` ステージと同じキー判定で R2 上の `current_news.json` を一度だけ掃除する CLI。
+
+```bash
+export CLOUDFLARE_R2_ENDPOINT=...
+export CLOUDFLARE_R2_KEY=...
+export CLOUDFLARE_R2_SECRET=...
+python scripts/r2_dedupe_cleanup.py --bucket agent-platform-artifacts --dry-run
+# 問題なければ --dry-run を外して実行
+python scripts/r2_dedupe_cleanup.py --bucket agent-platform-artifacts
+```
+
+list 形式 / `{items: [...]}` ラッパー形式 / `{articles: [...]}` 形式を自動判別。
+
+### 16.5 構文チェック済み
+
+- `python3 -m py_compile` で `r2_dedupe.py` / `r2_dedupe_cleanup.py` / `core.py` が通る
+- `node --check src/cloudflare/worker.js` が通る
+- `node --check` で index.html の inline JS(37KB)が通る
+- ブラウザ実機での動作確認は未実施
+
+### 16.6 まだやっていないこと(次セッション)
+
+優先順位順:
+
+1. **`r2_dedupe` ステージの単体テスト**(`tests/test_r2_dedupe.py`): skip / delete / report_only 各モードの挙動 + URL 正規化エッジケース
+2. **`r2_dedupe` を実 pipeline.yml に組み込む**: 上記 16.3 の例を追記。`report_json` / `report_markdown` の `depends_on` も連動修正
+3. **R2 にワンショット掃除を実行**(`r2_dedupe_cleanup.py --dry-run` → 本実行)
+4. **Cloudflare Access の許可メールアドレス確定**(Phase 14 から持ち越し)
+5. **`POST_INSTALL.md` に Cloudflare Access + `wrangler secret put GH_PAT` 手順を記載**
+6. **`/api/github/dispatch` エンドポイント**(workflow_dispatch トリガ): スケジュール画面の「今すぐ実行」ボタン用。現状は未配線
+7. **既存「データが出ない」バグの切り分け**: Phase 14 §3.3 で挙げた meta_export / r2_upload 周りの調査。SPA 側の loaders は実装済みなので、R2 にファイルが上がってくれば自動的に表示される
+8. **ブラウザ実機検証**: モバイル Safari と Chrome で各画面を1回ずつ操作
+9. **`runtime.json` のスキーマ確定**: 16.1 で `cfg.collect.max_age_days` / `cfg.collect.drop_undated` / `cfg.filter.threshold` という形で書き込んでいるが、既存の `collectors.rss` / `filters.llm_score` がこの構造を読む前提になっているか確認(対応していなければ各ステージ側に runtime.json マージロジックを追加)
+10. **`docs/REQUIREMENTS.md` / `docs/SYSTEM_DESIGN.md` の v4 構造への更新**(Phase 14 から持ち越し)
+
+### 16.7 設計上の留意点
+
+- **`pipeline.yml` の YAML コメントは消える**: js-yaml の `dump` はコメント情報を保持しない。SPA 経由で保存すると元 YAML のコメントが全て失われる。対策案: (a) 重要なコメントは別ファイル(README やコードのドキュメント)に移す、(b) コメント保持型 YAML パーサ(yawn/eemeli yaml 等)に乗り換える。当面は (a) を推奨
+- **`fetchR2` が CORS で弾かれる可能性**: R2 公開バケットの CORS 設定で SPA のオリジンを許可する必要あり。`worker.js` の `corsHeaders()` は Worker 自身の応答用なので別件。`POST_INSTALL.md` での手順記載が必要
+- **`/api/rss/preview` の正規表現パーサ**: XMLパーサ無しで割り切った実装。pretty-printed でない feed や CDATA 内の入れ子ケースは取り損ねる可能性あり。プレビュー用途で5件返すだけなので許容範囲だが、本格的なフィードバリデーションには使えない
+- **`r2_dedupe` の `delete` モードは実質「skip 相当」**: 実装上は「新規側を残し、既存側は report のみ」になっている。本物の `delete`(R2 上のオブジェクトから古い重複を削除)を実装するには `r2_upload` 側で全件再書込が必要だが、現状の reporter はそもそも `current_news.json` を全件上書きしているので結果的に古い重複は消える。ドキュメント上の挙動説明として正確に書いておくこと
 
 ---
 
