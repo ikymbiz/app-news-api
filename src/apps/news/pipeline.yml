@@ -44,6 +44,8 @@ stages:
       backoff: exponential
       initial_delay_seconds: 10
     config:
+      # NOTE: prompt_file の YAML frontmatter で `model:` が指定されている場合、
+      # そちらが優先されます(REQUIREMENTS.md §1.1)。下記 model はフォールバック値。
       model: gemini-2.5-flash-lite
       response_mime_type: application/json
       thinking_budget: 0

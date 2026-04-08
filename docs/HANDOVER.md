@@ -1,6 +1,50 @@
 # HANDOVER: Current Status & Next Steps
 
-最終更新: 2026-04-08(Phase 11 + 12 実機デプロイセッション後)
+最終更新: 2026-04-08(Phase 13 UI 再設計セッション後)
+
+---
+
+## 0. Phase 13 概要(本セッションの追加変更)
+
+**合意済み要件 3+1**(`docs/REQUIREMENTS.md` に正式記録):
+1. プロンプトごとに1モデル割当(YAML frontmatter 方式)
+2. プロンプトの CRUD を Admin SPA 上で(GitHub Contents API 経由)
+3. Pipeline 内 Stage の入替・追加・削除を Admin SPA 上で(既存部品の組み合わせのみ)
+4. 記事確認 UI「ニュース」タブの新設
+
+**実装済み(コード)**:
+- `docs/REQUIREMENTS.md` 新規(要件書)
+- `config/models.yml` 新規(モデルカタログ、7モデル)
+- `config/stages.catalog.yml` 新規(ステージ部品カタログ、8部品)
+- `src/apps/news/prompts/filter_prompt.md` frontmatter 追加
+- `src/agent/stages/filters/llm_score.py` frontmatter 読み取りロジック追加(`_split_frontmatter`)
+- `src/apps/news/pipeline.yml` フォールバックコメント追記
+- `src/admin/index.html` 全面書き直し(ニュースタブ追加 / 全ラベル日本語化 / プロンプト CRUD UI / パイプラインエディタ UI / Filter Prompt セクション削除 / js-yaml CDN 追加)
+- `src/admin/app.js` 約400行追加(News ローダ・レンダラ / Prompts CRUD / Pipeline エディタ / Catalogs ローダ / GitHub Contents API ヘルパ)
+- `src/admin/style.css` 約300行追加(news-card / prompts-layout / prompt-editor / pipeline-stage 等)
+- `docs/SYSTEM_DESIGN.md` §4.2 frontmatter 記述追加、§7 Admin SPA Editor 新設
+- `README.md` §2.1 / §2.3 追記
+
+**用語改名(全項目日本語化)**:
+- ヘッダ: 配信URL / GitHubリポジトリ / アプリ / 再読み込み
+- タブ: ニュース(新) / 実行履歴 / ステージ詳細 / コスト / 成果物 / 設定
+- 設定セクション: 動作チューニング / プロンプト(新) / パイプライン構成 / RSSソース / 実行スケジュール
+- 削除: Filter Prompt セクション(プロンプトに統合)
+
+**実機未確認(重要)**:
+- Phase 13 の変更は **1度も実機で動かしていない**。次回セッション開始時の最優先タスクは:
+  1. zip を Release に上げて bootstrap
+  2. Admin SPA をブラウザで開き、各タブの描画確認
+  3. プロンプト CRUD の Save を1回実行(PAT 必須)
+  4. パイプラインエディタの Save を1回実行(慎重に、バックアップしてから)
+  5. ニュースタブで `current_news.json` が読めるか確認
+  6. `agent-platform` 再実行 → llm_score が frontmatter の model を読むか(ログの `llm_score.frontmatter_loaded` で確認)
+
+**既知の懸念点**:
+- `js-yaml` を CDN から読んでおり、Cloudflare Workers Static Assets 環境で CSP が問題になる可能性
+- `pipeline.yml` を js-yaml で dump するとコメントが消える(pipeline.yml の冒頭コメントと NOTE コメントが失われる)→ 保存前に警告ダイアログが必要かも
+- GitHub API の unauthenticated rate limit(60/h)は Prompts 一覧 / Pipeline fetch で消費される。PAT を設定しておけば 5000/h。
+- `prompt_temperature` と `response_mime_type` は frontmatter に保存されるが、llm_score.py 側の読み取りは `temperature` と `response_mime_type` のみ対応済み
 
 ---
 

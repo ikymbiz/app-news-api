@@ -54,9 +54,27 @@ class StageImpl:
         items: list[dict[str, Any]] = list(payload.get("items", []))
 
         try:
-            prompt_template = prompt_path.read_text(encoding="utf-8")
+            raw_text = prompt_path.read_text(encoding="utf-8")
         except FileNotFoundError as e:
             return self._fail(started, FailureCategory.PERMANENT, str(e))
+
+        # Parse YAML frontmatter (REQUIREMENTS.md §1.1).
+        # Frontmatter overrides pipeline.yml values for model/temperature/etc.
+        frontmatter, prompt_template = self._split_frontmatter(raw_text)
+        if frontmatter:
+            if "model" in frontmatter:
+                model_name = str(frontmatter["model"])
+            if "temperature" in frontmatter:
+                try:
+                    temperature = float(frontmatter["temperature"])
+                except (TypeError, ValueError):
+                    pass
+            if "response_mime_type" in frontmatter:
+                response_mime_type = str(frontmatter["response_mime_type"])
+            ctx.logger.info(
+                "llm_score.frontmatter_loaded",
+                extras={"model": model_name, "prompt_file": str(prompt_path)},
+            )
 
         user_context = self._resolve_user_context(cfg, ctx)
 
@@ -142,6 +160,40 @@ class StageImpl:
     # ------------------------------------------------------------------ #
     # Helpers
     # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _split_frontmatter(text: str) -> tuple[dict[str, Any] | None, str]:
+        """Parse YAML frontmatter from a markdown file.
+
+        Returns (frontmatter_dict_or_None, body_text). If no frontmatter
+        delimiters are found, returns (None, original_text).
+        """
+        if not text.startswith("---"):
+            return None, text
+        # Find the closing delimiter on its own line.
+        m = re.search(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+        if not m:
+            return None, text
+        fm_raw = m.group(1)
+        body = text[m.end():]
+        try:
+            import yaml  # type: ignore
+            fm = yaml.safe_load(fm_raw)
+            if isinstance(fm, dict):
+                return fm, body
+        except ImportError:
+            # Minimal manual parser for `key: value` pairs (no nesting).
+            fm: dict[str, Any] = {}
+            for line in fm_raw.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or ":" not in line:
+                    continue
+                k, _, v = line.partition(":")
+                fm[k.strip()] = v.strip().strip('"').strip("'")
+            return fm, body
+        except Exception:  # noqa: BLE001
+            pass
+        return None, text
 
     @staticmethod
     def _resolve_user_context(cfg: dict[str, Any], ctx: StageContext) -> str:

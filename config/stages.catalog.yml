@@ -1,0 +1,88 @@
+# Stage Implementation Catalog
+# Admin SPA「設定 → パイプライン構成」の Stage 追加ドロップダウンに表示される候補。
+# pipeline.yml の `use:` 値に対応する。
+# REQUIREMENTS.md §1.3 を参照。
+
+stages:
+  - use: stages.collectors.rss
+    category: collector
+    display_name: RSS / Atom Collector
+    description: "config/sources.json を読み、有効な全フィードから記事を取得する。"
+    config_keys:
+      - { name: sources_file,        type: string,  default: "config/sources.json", required: true }
+      - { name: runtime_file,        type: string,  default: "config/runtime.json", required: false }
+      - { name: user_agent,          type: string,  default: "agent-platform/1.0",  required: false }
+      - { name: fetch_timeout_seconds, type: int,   default: 20,  required: false }
+      - { name: max_items_per_source, type: int,    default: 50,  required: false }
+      - { name: max_age_days,        type: int,     default: 7,   required: false }
+      - { name: drop_undated,        type: bool,    default: false, required: false }
+
+  - use: stages.filters.keyword
+    category: filter
+    display_name: Keyword / Dedupe Filter
+    description: "汎用フィルタ部品。dedupe モードで重複除外、keyword モードで語句マッチ。"
+    config_keys:
+      - { name: mode,             type: enum,   options: [dedupe, keyword], required: true }
+      - { name: hash_fields,      type: list,   default: [url, title], required: false }
+      - { name: store_collection, type: string, default: "seen_items", required: false }
+
+  - use: stages.filters.llm_score
+    category: filter
+    display_name: LLM Contextual Scorer
+    description: "プロンプトに基づき各記事を 0-10 でスコアリング。frontmatter のモデルを使用。"
+    config_keys:
+      - { name: prompt_file,        type: string, required: true }
+      - { name: model,              type: string, default: "gemini-2.5-flash-lite", required: false, note: "frontmatter があれば上書きされる" }
+      - { name: temperature,        type: float,  default: 0.0, required: false }
+      - { name: response_mime_type, type: string, default: "application/json", required: false }
+      - { name: user_context_ref,   type: string, required: false }
+
+  - use: stages.researchers.deep_research
+    category: researcher
+    display_name: Deep Research
+    description: "高スコア記事に対して背景調査を実行(GPT-4o Deep Research / Gemini Pro)。"
+    config_keys:
+      - { name: model,             type: string, default: "gpt-4o-deep-research", required: true }
+      - { name: fallback_model,    type: string, default: "gemini-2.5-pro",       required: false }
+      - { name: max_summary_chars, type: int,    default: 4000, required: false }
+      - { name: include_citations, type: bool,   default: true, required: false }
+
+  - use: stages.reporters.markdown
+    category: reporter
+    display_name: Markdown Report
+    description: "人間可読な Markdown レポートを生成(スコア分布ヒストグラム + 上位記事)。"
+    config_keys:
+      - { name: output_path,          type: string, required: true }
+      - { name: title_template,       type: string, default: "Daily News Digest - {{date}}", required: false }
+      - { name: max_items,            type: int,    default: 30,  required: false }
+      - { name: high_value_threshold, type: float,  default: 8.0, required: false }
+
+  - use: stages.reporters.json
+    category: reporter
+    display_name: JSON Report
+    description: "配信用 JSON(current_news.json)を生成。スコア順、上限件数キャップ付き。"
+    config_keys:
+      - { name: output_path,       type: string, required: true }
+      - { name: schema_version,    type: string, default: "1.0", required: false }
+      - { name: max_summary_chars, type: int,    default: 4000, required: false }
+      - { name: max_items,         type: int,    default: 100, required: false }
+
+  - use: stages.reporters.meta_export
+    category: reporter
+    display_name: Firestore Meta Export
+    description: "Firestore からジョブ/ステージ/メトリクスを JSON ダンプ(Admin SPA 用)。"
+    config_keys:
+      - { name: output_dir, type: string, required: true }
+      - { name: days,       type: int,    default: 30,  required: false }
+      - { name: limit,      type: int,    default: 500, required: false }
+
+  - use: stages.reporters.r2_upload
+    category: reporter
+    display_name: Cloudflare R2 Upload
+    description: "Distribution Layer。成果物を R2 バケットへアップロードする。"
+    config_keys:
+      - { name: bucket,           type: string, required: true }
+      - { name: prefix,           type: string, default: "news/", required: false }
+      - { name: endpoint_url_env, type: string, default: "CLOUDFLARE_R2_ENDPOINT", required: false }
+      - { name: access_key_env,   type: string, default: "CLOUDFLARE_R2_KEY", required: false }
+      - { name: secret_key_env,   type: string, default: "CLOUDFLARE_R2_SECRET", required: false }

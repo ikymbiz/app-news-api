@@ -1,0 +1,54 @@
+# Model Catalog
+# Admin SPA「設定 → プロンプト」の Model ドロップダウンに表示される候補。
+# 各プロンプトの frontmatter で `model: <id>` として参照される。
+# REQUIREMENTS.md §1.1 を参照。
+
+models:
+  - id: gemini-2.5-flash-lite
+    provider: google
+    display_name: Gemini 2.5 Flash Lite
+    context_window: 1048576
+    capabilities: [json_mode]
+    notes: "安価・高速。フィルタ用途のデフォルト。"
+
+  - id: gemini-2.5-flash
+    provider: google
+    display_name: Gemini 2.5 Flash
+    context_window: 1048576
+    capabilities: [json_mode, thinking]
+    notes: "Lite より高品質。中量タスク向け。"
+
+  - id: gemini-2.5-pro
+    provider: google
+    display_name: Gemini 2.5 Pro
+    context_window: 2097152
+    capabilities: [json_mode, thinking, vision]
+    notes: "高品質・高コスト。Deep Research フォールバック。"
+
+  - id: gpt-4o-mini
+    provider: openai
+    display_name: GPT-4o mini
+    context_window: 128000
+    capabilities: [json_mode]
+    notes: "OpenAI 安価モデル。Gemini 代替候補。"
+
+  - id: gpt-4o
+    provider: openai
+    display_name: GPT-4o
+    context_window: 128000
+    capabilities: [json_mode, vision]
+    notes: "OpenAI 高品質モデル。"
+
+  - id: gpt-4o-deep-research
+    provider: openai
+    display_name: GPT-4o Deep Research
+    context_window: 128000
+    capabilities: [json_mode, web_search]
+    notes: "Deep Research 用。高コスト。"
+
+  - id: claude-sonnet-4-5
+    provider: anthropic
+    display_name: Claude Sonnet 4.5
+    context_window: 200000
+    capabilities: [json_mode, vision]
+    notes: "Anthropic 中量モデル。"

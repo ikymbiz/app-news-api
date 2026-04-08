@@ -10,7 +10,7 @@
 ## 2. 要件定義 (Requirements)
 ### 2.1. 基盤要件(汎用エージェント基盤)
 - **パイプライン定義**: `apps/<name>/pipeline.yml` で DAG・依存関係・条件分岐を宣言。
-- **ステージ部品のプラガビリティ**: Collector / Filter / Researcher / Reporter 等を部品化し `src/agent/stages/` から動的ロード。
+- **ステージ部品のプラガビリティ**: Collector / Filter / Researcher / Reporter 等を部品化し `src/agent/stages/` から動的ロード。管理画面のパイプラインエディタで既存部品を組み合わせて DAG を編集できる(詳細: `docs/REQUIREMENTS.md`)。
 - **オーケストレータ**: ジョブ実行制御、スケジューリング、状態管理、リトライ、観測性を提供。
 - **アプリケーション分離**: 用途固有ロジックは `src/apps/<name>/` 配下に隔離し、基盤コードを汚染しない。
 
@@ -23,6 +23,7 @@
 
 ### 2.3. ニュース用リファレンス実装の機能
 - 多角的RSS収集、LLMによる文脈適合性スコアリング(0-10)、Deep Research、Markdownレポート生成、管理UI、HTA閲覧クライアント。
+- 管理UI(Admin SPA)から以下を編集できる: プロンプト(CRUD / モデル割当)、パイプライン構成(ステージの追加・削除・並べ替え)、動作チューニング(取得期間・閾値)、RSSソース(GitHub経由)。記事は「ニュース」タブで配信 JSON を直接閲覧できる。
 
 ### 2.4. 非機能要件
 - **AI-Only Development**: 全コード・設計をAIが制御し、人間の直接編集を排除。

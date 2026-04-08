@@ -54,9 +54,11 @@ stages:
 5. **report** — `stages.reporters.markdown` + `json`
 
 ### 4.2. Filter ステージ詳細
-- モデル: Gemini 2.5 Flash Lite
+- モデル: **プロンプトの YAML frontmatter で指定**(REQUIREMENTS.md §1.1)。デフォルトは Gemini 2.5 Flash Lite。
+- pipeline.yml の `model:` はフォールバック値として機能する(frontmatter があれば上書きされる)。
 - 設定: `response_mime_type: application/json`、`thinking_budget: 0` 相当
 - 出力: `{score: float, reason: string, topics: string[]}`
+- プロンプト本体は `src/apps/news/prompts/filter_prompt.md`。先頭に `---` で囲まれた YAML frontmatter(`model`, `temperature`, `description` 等)を持つ。
 
 ## 5. データ配信プロトコル
 1. Reporter が `current_news.json` を生成し Cloudflare R2 にアップロード。
@@ -67,3 +69,36 @@ stages:
 - **Local Persistence**: ローカル `data/` への保存。
 - **Incremental Merge**: 新旧データ統合(`client/hta/local_logic.js`)。
 - **Librarian Mode**: 月単位でJSONを物理分割しパース負荷を軽減。
+
+## 7. Admin SPA Editor
+REQUIREMENTS.md で合意された編集可能領域を Admin SPA (`src/admin/`) から GitHub Contents API 経由で直接編集する。
+
+### 7.1. ビュー構成
+- **ニュース**: 配信URL から `current_news.json` を取得し、記事カードを表示(スコア・カテゴリ・並び順でフィルタ)。
+- **実行履歴 / ステージ詳細 / コスト / 成果物**: 従来通りの観測ビュー。
+- **設定**: 編集可能領域を集約。
+  - 動作チューニング(`config/runtime.json`)
+  - プロンプト(`src/apps/<app>/prompts/*.md` の CRUD)
+  - パイプライン構成(`src/apps/<app>/pipeline.yml` のステージ編集)
+  - RSSソース(閲覧のみ、GitHub 編集リンク)
+  - 実行スケジュール(閲覧のみ、GitHub 編集リンク)
+
+### 7.2. 書き込みパターン
+すべての Save 操作は GitHub Contents API を使用する:
+1. GET で現在の SHA を取得
+2. 編集内容を base64 エンコードして PUT
+3. SHA 不一致(409)時は再取得を強制
+
+PAT は `agent-admin-github-pat` キーで localStorage に保存され、動作チューニングの入力欄から設定する。すべての編集機能で共用される。
+
+### 7.3. カタログファイル
+Admin SPA のドロップダウン候補となる2つのカタログファイル:
+- `config/models.yml` — プロンプトの使用モデル選択肢
+- `config/stages.catalog.yml` — パイプライン構成のステージ追加候補
+
+どちらも git 管理下にあり、真実の源は常に git である。
+
+### 7.4. 将来課題
+- 新規 Stage 部品コードの UI 生成(コード生成 + PR 作成フロー)
+- プロンプトの Jinja2 変数展開プレビュー
+- パイプライン編集時の DAG グラフ可視化

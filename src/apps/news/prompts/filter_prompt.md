@@ -1,3 +1,11 @@
+---
+id: filter_prompt
+description: AI OSINT 文脈適合性スコアラ。各記事を 0-10 で評価する。
+model: gemini-2.5-flash-lite
+temperature: 0.0
+response_mime_type: application/json
+---
+
 # Filter Prompt — AI OSINT Context Relevance Scorer
 
 > Model: **Gemini 2.5 Flash Lite**

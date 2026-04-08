@@ -3,191 +3,277 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agent Platform — Admin</title>
+  <title>Agent Platform — 管理画面</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="app-header">
     <h1>Agent Platform</h1>
     <nav>
-      <button data-view="runs" class="nav active">Runs</button>
-      <button data-view="stages" class="nav">Stages</button>
-      <button data-view="cost" class="nav">Cost</button>
-      <button data-view="artifacts" class="nav">Artifacts</button>
-      <button data-view="settings" class="nav">Settings</button>
+      <button data-view="news" class="nav active">ニュース</button>
+      <button data-view="runs" class="nav">実行履歴</button>
+      <button data-view="stages" class="nav">ステージ詳細</button>
+      <button data-view="cost" class="nav">コスト</button>
+      <button data-view="artifacts" class="nav">成果物</button>
+      <button data-view="settings" class="nav">設定</button>
     </nav>
     <div class="config">
-      <label>Distributor URL
+      <label>配信URL
         <input id="distributor-url" type="url" placeholder="https://artifacts.example.invalid" />
       </label>
-      <label>GitHub Repo
-        <input id="github-repo" type="text" placeholder="owner/repo (e.g. ikymbiz/app-news-api)" />
+      <label>GitHubリポジトリ
+        <input id="github-repo" type="text" placeholder="owner/repo (例: ikymbiz/app-news-api)" />
       </label>
-      <label>App
+      <label>アプリ
         <select id="app-select"><option value="news">news</option></select>
       </label>
-      <button id="refresh">Refresh</button>
+      <button id="refresh">再読み込み</button>
     </div>
   </header>
 
   <main>
-    <section id="view-runs" class="view active">
-      <h2>Job Runs</h2>
-      <div class="filters">
-        <label>Status
-          <select id="filter-status">
-            <option value="">(all)</option>
-            <option>success</option>
-            <option>failed</option>
-            <option>running</option>
+
+    <!-- ============ ニュース ============ -->
+    <section id="view-news" class="view active">
+      <h2>ニュース</h2>
+      <div class="news-controls">
+        <label>最低スコア
+          <input id="news-min-score" type="number" min="0" max="10" step="0.5" value="7" />
+        </label>
+        <label>カテゴリ
+          <select id="news-category-filter">
+            <option value="">(すべて)</option>
           </select>
         </label>
-        <label>Since
+        <label>並び順
+          <select id="news-sort">
+            <option value="score-desc">スコア降順</option>
+            <option value="score-asc">スコア昇順</option>
+            <option value="date-desc">新着順</option>
+          </select>
+        </label>
+      </div>
+      <div id="news-meta" class="news-meta"></div>
+      <div id="news-list" class="news-list"></div>
+      <p id="news-empty" class="empty">配信URL を設定して再読み込みすると記事が表示されます。</p>
+    </section>
+
+    <!-- ============ 実行履歴 ============ -->
+    <section id="view-runs" class="view">
+      <h2>実行履歴</h2>
+      <div class="filters">
+        <label>状態
+          <select id="filter-status">
+            <option value="">(すべて)</option>
+            <option value="success">success</option>
+            <option value="failed">failed</option>
+            <option value="running">running</option>
+          </select>
+        </label>
+        <label>開始日以降
           <input id="filter-since" type="date" />
         </label>
       </div>
       <table id="runs-table">
         <thead><tr>
-          <th>job_run_id</th><th>job</th><th>status</th>
-          <th>started</th><th>duration</th><th>cost</th><th>stages</th>
+          <th>job_run_id</th><th>job</th><th>状態</th>
+          <th>開始</th><th>所要</th><th>コスト</th><th>段数</th>
         </tr></thead>
         <tbody></tbody>
       </table>
-      <p class="empty">Load data by pointing the Distributor URL at your Worker deployment.</p>
+      <p class="empty">配信URL を Worker に向けるとデータが読み込まれます。</p>
     </section>
 
+    <!-- ============ ステージ詳細 ============ -->
     <section id="view-stages" class="view">
-      <h2>Stage Runs</h2>
+      <h2>ステージ詳細</h2>
       <table id="stages-table">
         <thead><tr>
-          <th>job_run_id</th><th>stage</th><th>use</th><th>status</th>
-          <th>attempt</th><th>duration</th><th>error</th>
+          <th>job_run_id</th><th>stage</th><th>use</th><th>状態</th>
+          <th>試行</th><th>所要</th><th>エラー</th>
         </tr></thead>
         <tbody></tbody>
       </table>
     </section>
 
+    <!-- ============ コスト ============ -->
     <section id="view-cost" class="view">
-      <h2>LLM Cost Tracking</h2>
+      <h2>コスト</h2>
       <div class="cost-summary">
-        <div class="stat"><span class="label">Total (today)</span><span id="cost-today">—</span></div>
-        <div class="stat"><span class="label">Total (7d)</span><span id="cost-7d">—</span></div>
-        <div class="stat"><span class="label">Total (30d)</span><span id="cost-30d">—</span></div>
+        <div class="stat"><span class="label">本日</span><span id="cost-today">—</span></div>
+        <div class="stat"><span class="label">7日</span><span id="cost-7d">—</span></div>
+        <div class="stat"><span class="label">30日</span><span id="cost-30d">—</span></div>
       </div>
       <table id="cost-table">
         <thead><tr>
-          <th>model</th><th>prompt tok</th><th>completion tok</th><th>USD</th>
+          <th>モデル</th><th>入力tok</th><th>出力tok</th><th>USD</th>
         </tr></thead>
         <tbody></tbody>
       </table>
     </section>
 
+    <!-- ============ 成果物 ============ -->
     <section id="view-artifacts" class="view">
-      <h2>R2 Artifacts</h2>
+      <h2>成果物</h2>
       <table id="artifacts-table">
         <thead><tr>
-          <th>key</th><th>size</th><th>uploaded</th><th>etag</th><th></th>
+          <th>キー</th><th>サイズ</th><th>更新</th><th>etag</th><th></th>
         </tr></thead>
         <tbody></tbody>
       </table>
     </section>
 
+    <!-- ============ 設定 ============ -->
     <section id="view-settings" class="view">
-      <h2>Configuration</h2>
+      <h2>設定</h2>
       <p class="hint">
-        These files live in the GitHub repo. To change a value, click <em>Edit on GitHub</em>
-        next to any section, modify it in the GitHub web editor, and commit. The next
-        <code>agent-platform</code> workflow run will pick up the change automatically.
-        No re-deploy or bootstrap needed.
+        以下の設定はすべて GitHub リポジトリの実ファイルに保存されます。
+        <strong>動作チューニング・プロンプト・パイプライン構成</strong> の3つは画面から直接編集して保存できます。
+        保存には <code>contents:write</code> 権限の Personal Access Token が必要で、
+        トークンはこのブラウザの localStorage にのみ保存されます。
       </p>
 
+      <!-- ----- 動作チューニング ----- -->
       <div class="settings-section">
         <div class="settings-header">
-          <h3>Runtime (editable)</h3>
-          <a id="runtime-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+          <h3>動作チューニング</h3>
+          <a id="runtime-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
         </div>
-        <p class="hint">
-          記事の取得期間とハイライトのスコア閾値。<strong>このセクションだけは Admin SPA から直接保存できます</strong>
-          (GitHub Contents API 経由)。保存には <code>contents:write</code> 権限の Personal Access Token が必要です。
-          PAT はこのブラウザの localStorage にのみ保存されます。
-        </p>
         <div class="runtime-form">
           <label>取得期間(日数)
             <input id="rt-max-age-days" type="number" min="0" max="365" step="1" placeholder="7" />
           </label>
-          <label class="checkbox-row">日付なし記事を捨てる
+          <label class="checkbox-row">日付不明の記事を除外
             <input id="rt-drop-undated" type="checkbox" />
           </label>
           <label>★ ハイライト閾値(0-10)
             <input id="rt-high-threshold" type="number" min="0" max="10" step="0.1" placeholder="8.0" />
           </label>
-          <label>GitHub PAT(<code>contents:write</code>)
+          <label>GitHubアクセストークン
             <input id="rt-github-pat" type="password" placeholder="ghp_xxx... (localStorage のみ)" autocomplete="off" />
           </label>
           <div class="runtime-actions">
-            <button id="rt-save-btn" type="button">Save to GitHub</button>
-            <button id="rt-reload-btn" type="button">Reload from GitHub</button>
+            <button id="rt-save-btn" type="button">保存</button>
+            <button id="rt-reload-btn" type="button">再取得</button>
             <span id="rt-status" class="rt-status"></span>
           </div>
         </div>
-        <pre id="runtime-raw" class="raw-file">(load by clicking Refresh)</pre>
+        <pre id="runtime-raw" class="raw-file">(再読み込みで取得されます)</pre>
       </div>
 
+      <!-- ----- プロンプト ----- -->
       <div class="settings-section">
         <div class="settings-header">
-          <h3>RSS Sources <span id="src-count" class="count"></span></h3>
-          <a id="src-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+          <h3>プロンプト <span id="prompts-count" class="count"></span></h3>
+          <button id="prompt-new-btn" type="button" class="edit-link">+ 新規作成</button>
+        </div>
+        <p class="hint">
+          各プロンプトは1つのモデルに紐付きます。frontmatter の <code>model:</code> がパイプラインの設定を上書きします。
+        </p>
+        <div class="prompts-layout">
+          <div class="prompts-list">
+            <ul id="prompts-ul"></ul>
+            <p id="prompts-empty" class="empty">GitHubリポジトリを設定して再読み込みしてください。</p>
+          </div>
+          <div id="prompt-editor" class="prompt-editor" hidden>
+            <div class="prompt-editor-meta">
+              <label>ファイル名 (.md)
+                <input id="prompt-filename" type="text" placeholder="my_prompt.md" />
+              </label>
+              <label>説明
+                <input id="prompt-description" type="text" placeholder="このプロンプトが何をするか" />
+              </label>
+              <label>使用モデル
+                <select id="prompt-model"></select>
+              </label>
+              <label>temperature
+                <input id="prompt-temperature" type="number" min="0" max="2" step="0.1" value="0.0" />
+              </label>
+            </div>
+            <label class="prompt-body-label">本文(Markdown)
+              <textarea id="prompt-body" rows="14" spellcheck="false"></textarea>
+            </label>
+            <div class="prompt-actions">
+              <button id="prompt-save-btn" type="button">保存</button>
+              <button id="prompt-cancel-btn" type="button">キャンセル</button>
+              <button id="prompt-delete-btn" type="button" class="danger">削除</button>
+              <span id="prompt-status" class="rt-status"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ----- パイプライン構成 ----- -->
+      <div class="settings-section">
+        <div class="settings-header">
+          <h3>パイプライン構成</h3>
+          <a id="pipe-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
+        </div>
+        <p class="hint">
+          ステージの順序変更・追加・削除ができます。各ステージの詳細設定は GitHub 上で編集してください。
+        </p>
+        <div id="pipeline-editor" class="pipeline-editor">
+          <ol id="pipeline-stages"></ol>
+          <div class="pipeline-add">
+            <select id="pipeline-add-select">
+              <option value="">— ステージ部品を選択 —</option>
+            </select>
+            <button id="pipeline-add-btn" type="button">+ 追加</button>
+          </div>
+          <div class="pipeline-actions">
+            <button id="pipeline-save-btn" type="button">保存</button>
+            <button id="pipeline-reset-btn" type="button">変更を破棄</button>
+            <span id="pipeline-status" class="rt-status"></span>
+          </div>
+        </div>
+        <details>
+          <summary>raw pipeline.yml を表示</summary>
+          <pre id="pipeline-raw" class="raw-file">(再読み込みで取得されます)</pre>
+        </details>
+      </div>
+
+      <!-- ----- RSSソース ----- -->
+      <div class="settings-section">
+        <div class="settings-header">
+          <h3>RSSソース <span id="src-count" class="count"></span></h3>
+          <a id="src-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
         </div>
         <div class="settings-controls">
-          <label>Category filter
+          <label>カテゴリ
             <select id="src-category-filter">
-              <option value="">(all)</option>
+              <option value="">(すべて)</option>
             </select>
           </label>
-          <label>Status filter
+          <label>状態
             <select id="src-status-filter">
-              <option value="">(all)</option>
-              <option value="enabled">enabled only</option>
-              <option value="disabled">disabled only</option>
+              <option value="">(すべて)</option>
+              <option value="enabled">有効のみ</option>
+              <option value="disabled">無効のみ</option>
             </select>
           </label>
         </div>
         <table id="sources-table">
           <thead><tr>
-            <th>id</th><th>name</th><th>category</th><th>via</th><th>enabled</th><th>URL</th>
+            <th>id</th><th>名前</th><th>カテゴリ</th><th>via</th><th>有効</th><th>URL</th>
           </tr></thead>
           <tbody></tbody>
         </table>
-        <p id="src-empty" class="empty">Set GitHub Repo above and click Refresh to load sources.</p>
+        <p id="src-empty" class="empty">GitHubリポジトリを設定して再読み込みしてください。</p>
       </div>
 
+      <!-- ----- 実行スケジュール ----- -->
       <div class="settings-section">
         <div class="settings-header">
-          <h3>Pipeline Definition (8 stages, DAG)</h3>
-          <a id="pipe-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
+          <h3>実行スケジュール</h3>
+          <a id="jobs-edit-link" class="edit-link" target="_blank" rel="noopener">GitHubで開く →</a>
         </div>
-        <pre id="pipeline-raw" class="raw-file">(load by clicking Refresh)</pre>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-header">
-          <h3>Filter Prompt (Gemini scoring rubric)</h3>
-          <a id="prompt-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
-        </div>
-        <pre id="prompt-raw" class="raw-file">(load by clicking Refresh)</pre>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-header">
-          <h3>Jobs / Schedule (cron)</h3>
-          <a id="jobs-edit-link" class="edit-link" target="_blank" rel="noopener">Edit on GitHub →</a>
-        </div>
-        <pre id="jobs-raw" class="raw-file">(load by clicking Refresh)</pre>
+        <pre id="jobs-raw" class="raw-file">(再読み込みで取得されます)</pre>
       </div>
     </section>
   </main>
 
-  <footer><small>agent-platform admin — static SPA (no server)</small></footer>
+  <footer><small>agent-platform admin — static SPA</small></footer>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
   <script src="app.js" type="module"></script>
 </body>
 </html>
