@@ -1,0 +1,117 @@
+version: "1.0"
+name: news-reference-pipeline
+description: |
+  ニュース用リファレンス実装パイプライン(SYSTEM_DESIGN.md §4.1)。
+  RSS 収集 → 重複除外 → Gemini 2.5 Flash Lite によるスコアリング →
+  高スコア記事の Deep Research → Markdown/JSON レポート生成 を行う。
+
+defaults:
+  timeout_seconds: 900
+  checkpoint: true
+
+stages:
+  - id: collect
+    description: 多角的 RSS 収集
+    use: stages.collectors.rss
+    depends_on: []
+    config:
+      sources_file: config/sources.json
+      user_agent: "agent-platform/1.0 (+https://example.invalid)"
+      fetch_timeout_seconds: 20
+      max_items_per_source: 50
+
+  - id: dedupe
+    description: Firestore ハッシュ照合による重複除外
+    use: stages.filters.keyword  # 汎用フィルタ部品を dedupe モードで使用
+    depends_on: [collect]
+    config:
+      mode: dedupe
+      hash_fields: [url, title]
+      store_collection: seen_items
+
+  - id: filter
+    description: Gemini 2.5 Flash Lite による文脈適合性スコアリング(0-10)
+    use: stages.filters.llm_score
+    depends_on: [dedupe]
+    parallel: true
+    fan_out: items
+    timeout_seconds: 600
+    retry:
+      max: 2
+      backoff: exponential
+      initial_delay_seconds: 10
+    config:
+      model: gemini-2.5-flash-lite
+      response_mime_type: application/json
+      thinking_budget: 0
+      temperature: 0.0
+      prompt_file: src/apps/news/prompts/filter_prompt.md
+      user_context_ref: secrets.USER_CONTEXT
+      output_schema:
+        type: object
+        required: [score, reason, topics]
+        properties:
+          score: { type: number, minimum: 0, maximum: 10 }
+          reason: { type: string }
+          topics:
+            type: array
+            items: { type: string }
+
+  - id: research
+    description: 高スコア記事のみ Deep Research に投入
+    use: stages.researchers.deep_research
+    depends_on: [filter]
+    when: "filter.score >= 9.0"
+    parallel: true
+    fan_out: items
+    timeout_seconds: 1800
+    retry:
+      max: 1
+      backoff: exponential
+      initial_delay_seconds: 60
+    config:
+      model: gpt-4o-deep-research
+      fallback_model: gemini-2.5-pro
+      max_summary_chars: 4000
+      include_citations: true
+
+  - id: report_markdown
+    description: 人間可読な Markdown レポート生成
+    use: stages.reporters.markdown
+    depends_on: [research]
+    config:
+      output_path: artifacts/news/current_report.md
+      title_template: "Daily News Digest - {{date}}"
+
+  - id: report_json
+    description: 配信用 JSON(current_news.json)生成
+    use: stages.reporters.json
+    depends_on: [research]
+    config:
+      output_path: artifacts/news/current_news.json
+      schema_version: "1.0"
+      max_summary_chars: 4000
+
+  - id: meta_export
+    description: Firestore から直近ジョブ/ステージ/メトリクスを JSON ダンプ(Admin SPA 用)
+    use: stages.reporters.meta_export
+    depends_on: [research]
+    config:
+      output_dir: artifacts/news/meta
+      days: 30
+      limit: 500
+
+  - id: upload
+    description: Cloudflare R2 へ成果物をアップロード(Distribution Layer)
+    use: stages.reporters.r2_upload
+    depends_on: [report_markdown, report_json, meta_export]
+    retry:
+      max: 2
+      backoff: exponential
+      initial_delay_seconds: 15
+    config:
+      bucket: agent-platform-artifacts
+      prefix: news/
+      endpoint_url_env: CLOUDFLARE_R2_ENDPOINT
+      access_key_env: CLOUDFLARE_R2_KEY
+      secret_key_env: CLOUDFLARE_R2_SECRET

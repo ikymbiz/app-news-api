@@ -1,0 +1,66 @@
+{
+  "$schema_version": "1.0",
+  "_comment": "config/settings.json.template — 実運用時は settings.json にコピーし、値を埋めて使用する。機密値は GitHub Secrets 経由で環境変数として渡すことを推奨。",
+
+  "firestore": {
+    "project_id": "YOUR_GCP_PROJECT_ID",
+    "service_account_env": "FIREBASE_SERVICE_ACCOUNT",
+    "collections": {
+      "job_runs": "job_runs",
+      "stage_runs": "stage_runs",
+      "metrics": "metrics",
+      "seen_items": "seen_items"
+    }
+  },
+
+  "cloudflare": {
+    "r2": {
+      "account_id_env": "CLOUDFLARE_R2_ACCOUNT",
+      "access_key_id_env": "CLOUDFLARE_R2_KEY",
+      "secret_access_key_env": "CLOUDFLARE_R2_SECRET",
+      "bucket": "agent-platform-artifacts",
+      "public_base_url": "https://artifacts.example.invalid"
+    },
+    "worker": {
+      "route": "https://artifacts.example.invalid/*"
+    }
+  },
+
+  "llm": {
+    "filter": {
+      "provider": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api_key_env": "GEMINI_API_KEY",
+      "thinking_budget": 0,
+      "response_mime_type": "application/json",
+      "temperature": 0.0
+    },
+    "deep_research": {
+      "provider": "openai",
+      "model": "gpt-4o-deep-research",
+      "fallback": {
+        "provider": "google",
+        "model": "gemini-2.5-pro",
+        "api_key_env": "GEMINI_API_KEY"
+      },
+      "api_key_env": "OPENAI_API_KEY",
+      "max_summary_chars": 4000
+    },
+    "pricing_usd_per_1k": {
+      "gemini-2.5-flash-lite": {"prompt": 0.0001, "completion": 0.0004},
+      "gemini-2.5-pro":        {"prompt": 0.00125, "completion": 0.005},
+      "gpt-4o-deep-research":  {"prompt": 0.005,  "completion": 0.015}
+    }
+  },
+
+  "runtime": {
+    "max_workers": 4,
+    "workdir": "./.workdir",
+    "log_level": "INFO"
+  },
+
+  "user_context": {
+    "_comment": "filter_prompt.md の {{user_context}} に注入される文字列。機密扱いする場合は AGENT_USER_CONTEXT 環境変数経由で渡す。",
+    "inline": "例: あなたは日本在住のソフトウェアエンジニアで、AI基盤・分散システム・低コスト運用に関心がある。"
+  }
+}

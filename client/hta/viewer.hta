@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+<head>
+<meta http-equiv="x-ua-compatible" content="IE=edge" />
+<title>Agent Platform — News Viewer</title>
+<HTA:APPLICATION
+  ID="newsViewer"
+  APPLICATIONNAME="AgentPlatformNewsViewer"
+  BORDER="thin"
+  CAPTION="yes"
+  ICON=""
+  MAXIMIZEBUTTON="yes"
+  MINIMIZEBUTTON="yes"
+  SHOWINTASKBAR="yes"
+  SINGLEINSTANCE="yes"
+  SYSMENU="yes"
+  WINDOWSTATE="normal"
+  SCROLL="no"
+  CONTEXTMENU="no"
+  INNERBORDER="no"
+/>
+<style>
+  html, body { margin: 0; padding: 0; font-family: "Segoe UI", "Meiryo", sans-serif;
+               background: #0f1115; color: #e8eaed; font-size: 13px; height: 100%; overflow: hidden; }
+  #header { background: #171a21; border-bottom: 1px solid #252a34; padding: 10px 14px;
+            display: flex; gap: 12px; align-items: center; }
+  #header input, #header select { background: #0f1115; color: #e8eaed;
+            border: 1px solid #252a34; padding: 5px 8px; }
+  #header input.url { width: 340px; }
+  #header button { background: #5fa8ff; color: #041024; border: 0; padding: 6px 12px;
+            font-weight: bold; cursor: pointer; }
+  #status { margin-left: auto; color: #8b93a1; font-size: 11px; }
+  #main { display: flex; height: calc(100% - 44px); }
+  #list { width: 360px; border-right: 1px solid #252a34; overflow: auto; background: #13161d; }
+  #list .item { padding: 10px 14px; border-bottom: 1px solid #1e222c; cursor: pointer; }
+  #list .item:hover { background: #1c2029; }
+  #list .item.selected { background: #1f2633; border-left: 3px solid #5fa8ff; padding-left: 11px; }
+  #list .title { font-weight: 600; margin-bottom: 4px; font-size: 12px; }
+  #list .meta { font-size: 10px; color: #8b93a1; }
+  #list .score { display: inline-block; padding: 1px 6px; border-radius: 3px;
+                 background: rgba(95,168,255,0.15); color: #5fa8ff; font-weight: bold;
+                 margin-right: 6px; }
+  #detail { flex: 1; padding: 20px 26px; overflow: auto; }
+  #detail h2 { margin: 0 0 8px 0; font-size: 17px; }
+  #detail .meta { color: #8b93a1; font-size: 11px; margin-bottom: 16px; }
+  #detail .section-title { font-size: 11px; color: #8b93a1; text-transform: uppercase;
+                           letter-spacing: 0.05em; margin-top: 20px; margin-bottom: 6px; }
+  #detail .summary { line-height: 1.6; white-space: pre-wrap; }
+  #detail .citations a { color: #5fa8ff; display: block; font-size: 11px; padding: 2px 0;
+                         text-decoration: none; }
+  #detail .topics span { display: inline-block; padding: 2px 8px; background: #1e222c;
+                         border-radius: 3px; margin-right: 6px; font-size: 10px; }
+</style>
+<script language="JScript" src="local_logic.js"></script>
+<script language="JScript">
+var state = {
+  items: [],
+  selectedIndex: -1,
+  distributor: "https://artifacts.example.invalid",
+  app: "news"
+};
+
+function initApp() {
+  try { window.resizeTo(1100, 720); } catch (e) {}
+  var cfg = LocalLogic.loadConfig();
+  if (cfg) {
+    state.distributor = cfg.distributor || state.distributor;
+    state.app = cfg.app || state.app;
+  }
+  document.getElementById("distributor").value = state.distributor;
+  document.getElementById("app").value = state.app;
+
+  var merged = LocalLogic.loadAllLocal(state.app);
+  state.items = merged;
+  renderList();
+  setStatus("Loaded " + merged.length + " items from local cache");
+}
+
+function onSync() {
+  state.distributor = document.getElementById("distributor").value;
+  state.app = document.getElementById("app").value;
+  LocalLogic.saveConfig({ distributor: state.distributor, app: state.app });
+  setStatus("Syncing…");
+
+  var url = state.distributor.replace(/\/+$/, "") + "/" + state.app + "/current_news.json";
+  var prevEtag = LocalLogic.loadEtag(state.app);
+  var result = LocalLogic.fetchWithEtag(url, prevEtag);
+
+  if (result.status === 304) {
+    setStatus("Up to date (304 Not Modified)");
+    return;
+  }
+  if (result.status !== 200) {
+    setStatus("Sync failed: HTTP " + result.status);
+    return;
+  }
+
+  var doc;
+  try { doc = LocalLogic.parseJson(result.body); }
+  catch (e) { setStatus("JSON parse error: " + e.message); return; }
+
+  LocalLogic.saveEtag(state.app, result.etag);
+  var merged = LocalLogic.mergeAndPersist(state.app, doc.items || []);
+  state.items = merged;
+  renderList();
+  setStatus("Synced: " + (doc.items || []).length + " remote, " + merged.length + " total");
+}
+
+function renderList() {
+  var sorted = state.items.slice().sort(function(a, b) {
+    var sa = (a.score || 0), sb = (b.score || 0);
+    if (sa !== sb) return sb - sa;
+    var pa = (a.published_at || ""), pb = (b.published_at || "");
+    return pb > pa ? 1 : (pb < pa ? -1 : 0);
+  });
+  state.items = sorted;
+
+  var html = "";
+  for (var i = 0; i < sorted.length; i++) {
+    var it = sorted[i];
+    html += '<div class="item" onclick="selectItem(' + i + ')" id="item-' + i + '">';
+    html += '<div class="title"><span class="score">' + formatScore(it.score) + '</span>' + esc(it.title) + '</div>';
+    html += '<div class="meta">' + esc(it.source || "") + ' · ' + esc(it.published_at || "") + '</div>';
+    html += '</div>';
+  }
+  document.getElementById("list").innerHTML = html;
+  if (sorted.length > 0) selectItem(0);
+  else document.getElementById("detail").innerHTML = '<p style="color:#8b93a1">No items. Press Sync.</p>';
+}
+
+function selectItem(idx) {
+  state.selectedIndex = idx;
+  var items = document.getElementById("list").getElementsByClassName("item");
+  for (var i = 0; i < items.length; i++) items[i].className = "item";
+  var sel = document.getElementById("item-" + idx);
+  if (sel) sel.className = "item selected";
+
+  var it = state.items[idx];
+  if (!it) return;
+
+  var html = "";
+  html += '<h2>' + esc(it.title) + '</h2>';
+  html += '<div class="meta">Source: ' + esc(it.source || "-") +
+          ' &nbsp;|&nbsp; Published: ' + esc(it.published_at || "-") +
+          ' &nbsp;|&nbsp; Score: <b>' + formatScore(it.score) + '</b></div>';
+  if (it.url) html += '<div class="meta">URL: <a href="' + esc(it.url) + '" onclick="openExternal(this.href); return false;">' + esc(it.url) + '</a></div>';
+
+  if (it.topics && it.topics.length) {
+    html += '<div class="section-title">Topics</div><div class="topics">';
+    for (var t = 0; t < it.topics.length; t++) html += '<span>' + esc(it.topics[t]) + '</span>';
+    html += '</div>';
+  }
+  if (it.reason) {
+    html += '<div class="section-title">Filter Reason</div><div>' + esc(it.reason) + '</div>';
+  }
+  if (it.summary) {
+    html += '<div class="section-title">Deep Research Summary</div><div class="summary">' + esc(it.summary) + '</div>';
+  }
+  if (it.citations && it.citations.length) {
+    html += '<div class="section-title">Citations</div><div class="citations">';
+    for (var c = 0; c < it.citations.length; c++) {
+      html += '<a href="' + esc(it.citations[c]) + '" onclick="openExternal(this.href); return false;">' + esc(it.citations[c]) + '</a>';
+    }
+    html += '</div>';
+  }
+  document.getElementById("detail").innerHTML = html;
+}
+
+function openExternal(url) {
+  try { new ActiveXObject("WScript.Shell").Run('"' + url + '"'); }
+  catch (e) { setStatus("Failed to open: " + e.message); }
+}
+
+function setStatus(msg) {
+  document.getElementById("status").innerHTML = esc(msg);
+}
+
+function formatScore(s) {
+  if (s === undefined || s === null) return "-";
+  return (Math.round(s * 10) / 10).toString();
+}
+
+function esc(s) {
+  if (s === undefined || s === null) return "";
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+</script>
+</head>
+<body onload="initApp()">
+  <div id="header">
+    <label>Distributor <input id="distributor" class="url" type="text" /></label>
+    <label>App <select id="app"><option value="news">news</option></select></label>
+    <button onclick="onSync()">Sync</button>
+    <span id="status"></span>
+  </div>
+  <div id="main">
+    <div id="list"></div>
+    <div id="detail"></div>
+  </div>
+</body>
+</html>

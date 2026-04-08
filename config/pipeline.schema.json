@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-platform/schemas/pipeline.schema.json",
+  "title": "Pipeline Definition Schema",
+  "description": "SYSTEM_DESIGN.md §3.1 に対応するパイプライン(DAG)定義スキーマ。apps/<app>/pipeline.yml のルート構造を規定する。",
+  "type": "object",
+  "required": ["version", "stages"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+    },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "defaults": {
+      "type": "object",
+      "description": "全ステージ共通のデフォルト設定。個別ステージの config でオーバーライド可能。",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 21600 },
+        "checkpoint": { "type": "boolean", "default": true }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/stage" }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "required": ["id", "use"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "パイプライン内で一意のステージID。when 式から参照される識別子。",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "description": { "type": "string" },
+        "use": {
+          "type": "string",
+          "description": "ステージ部品の登録名。形式: stages.<category>.<module>",
+          "pattern": "^stages\\.(collectors|filters|researchers|reporters)\\.[a-z][a-z0-9_]*$"
+        },
+        "depends_on": {
+          "type": "array",
+          "description": "依存する先行ステージID群。空配列・省略時はルートステージ扱い。",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "uniqueItems": true,
+          "default": []
+        },
+        "when": {
+          "type": "string",
+          "description": "実行条件式。未満たし時は skipped 扱い。例: 'filter.score >= 9.0'"
+        },
+        "parallel": {
+          "type": "boolean",
+          "default": false,
+          "description": "入力がリスト型の場合、要素ごとに並列実行するかを指示。"
+        },
+        "fan_out": {
+          "type": "string",
+          "description": "parallel=true 時、どの入力キーを展開するかを指定。"
+        },
+        "checkpoint": {
+          "type": "boolean",
+          "default": true,
+          "description": "ステージ完了時点で中間成果物を Firestore に保存するか。"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 21600
+        },
+        "retry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max": { "type": "integer", "minimum": 0, "maximum": 20, "default": 0 },
+            "backoff": { "type": "string", "enum": ["linear", "exponential"], "default": "exponential" },
+            "initial_delay_seconds": { "type": "integer", "minimum": 0, "default": 10 }
+          }
+        },
+        "config": {
+          "type": "object",
+          "description": "ステージ部品固有の設定。contracts.py の StageConfig 派生で検証される。",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

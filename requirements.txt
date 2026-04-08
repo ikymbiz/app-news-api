@@ -1,0 +1,24 @@
+# Agent Platform — runtime dependencies
+# Version pinning rationale:
+#  - google-generativeai: Gemini 2.5 thinking_config 仕様に直結するため固定
+#  - firebase-admin: Firestore コレクションスキーマ変更の影響を受けるため固定
+#  - boto3: R2 S3 互換 API は boto3 の endpoint_url 実装に依存
+
+# --- Core runtime ---
+pyyaml==6.0.2
+jsonschema==4.23.0
+
+# --- LLM providers ---
+google-generativeai==0.8.3
+openai==1.54.4
+
+# --- State & distribution ---
+firebase-admin==6.5.0
+boto3==1.35.70
+
+# --- Collectors ---
+feedparser==6.0.11
+requests==2.32.3
+
+# --- Test (used by .github/workflows/tests.yml) ---
+pytest==9.0.3

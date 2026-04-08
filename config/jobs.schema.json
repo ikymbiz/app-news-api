@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-platform/schemas/jobs.schema.json",
+  "title": "Jobs Definition Schema",
+  "description": "SYSTEM_DESIGN.md §2.2 / §2.3 に対応するジョブ定義スキーマ。config/jobs.yml のルート構造を規定する。",
+  "type": "object",
+  "required": ["version", "jobs"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "スキーマバージョン。セマンティックバージョニング。",
+      "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+    },
+    "defaults": {
+      "type": "object",
+      "description": "全ジョブ共通のデフォルト値。個別ジョブ設定でオーバーライド可能。",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 21600 },
+        "retry": { "$ref": "#/$defs/retryPolicy" }
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/job" }
+    }
+  },
+  "$defs": {
+    "job": {
+      "type": "object",
+      "required": ["id", "app", "pipeline", "trigger"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ジョブ一意識別子。Firestore job_runs のキーに使用。",
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+        },
+        "description": { "type": "string" },
+        "app": {
+          "type": "string",
+          "description": "src/apps/<app> 配下のアプリ名。",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "pipeline": {
+          "type": "string",
+          "description": "パイプライン定義ファイルへの相対パス(例: src/apps/news/pipeline.yml)。"
+        },
+        "enabled": { "type": "boolean", "default": true },
+        "trigger": { "$ref": "#/$defs/trigger" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 21600 },
+        "retry": { "$ref": "#/$defs/retryPolicy" },
+        "env": {
+          "type": "object",
+          "description": "ジョブ実行時に必要な環境変数名(値は Secrets から解決)。",
+          "additionalProperties": { "type": "string" }
+        },
+        "concurrency": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "group": { "type": "string" },
+            "cancel_in_progress": { "type": "boolean", "default": false }
+          }
+        }
+      }
+    },
+    "trigger": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "cron"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "schedule" },
+            "cron": {
+              "type": "string",
+              "description": "5 フィールド cron 式 (GitHub Actions 互換)。"
+            },
+            "timezone": { "type": "string", "default": "UTC" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "manual" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "event"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "webhook" },
+            "event": { "type": "string", "minLength": 1 },
+            "secret_ref": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "default": 0,
+          "description": "最大リトライ回数(初回実行は含めない)。"
+        },
+        "backoff": {
+          "type": "string",
+          "enum": ["linear", "exponential"],
+          "default": "exponential"
+        },
+        "initial_delay_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 30
+        },
+        "max_delay_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3600
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 21600,
+          "description": "単一試行のタイムアウト。"
+        },
+        "retry_on": {
+          "type": "array",
+          "description": "リトライ対象の失敗カテゴリ。未指定時は transient のみ。",
+          "items": {
+            "type": "string",
+            "enum": ["transient", "rate_limit", "timeout", "any"]
+          },
+          "default": ["transient", "rate_limit", "timeout"]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+name = "agent-platform-distributor"
+main = "worker.js"
+compatibility_date = "2025-05-01"
+
+# --------------------------------------------------------------------------- #
+# Routes
+# --------------------------------------------------------------------------- #
+# 実運用時は自前ドメインにルーティング。未設定時は workers.dev の既定ルート。
+# routes = [
+#   { pattern = "artifacts.example.invalid/*", zone_name = "example.invalid" }
+# ]
+
+# --------------------------------------------------------------------------- #
+# Environment variables (非機密のみ。機密は `wrangler secret put` で登録)
+# --------------------------------------------------------------------------- #
+[vars]
+ALLOWED_APPS = "news"
+CORS_ORIGIN = "*"
+
+# --------------------------------------------------------------------------- #
+# R2 binding
+# --------------------------------------------------------------------------- #
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "agent-platform-artifacts"
+preview_bucket_name = "agent-platform-artifacts-preview"
+
+# --------------------------------------------------------------------------- #
+# Observability
+# --------------------------------------------------------------------------- #
+[observability]
+enabled = true

@@ -1,0 +1,178 @@
+name: deploy-cloudflare
+
+# Auto-deploys the Cloudflare Worker (distributor) and the Admin SPA (Pages)
+# whenever src/cloudflare/** or src/admin/** changes on main, or when triggered
+# manually. Also creates the R2 buckets idempotently on first run.
+#
+# Required GitHub Actions secrets:
+#   CLOUDFLARE_API_TOKEN  — token with permissions:
+#                            - Account · Workers Scripts · Edit
+#                            - Account · Cloudflare Pages · Edit
+#                            - Account · Workers R2 Storage · Edit
+#                          (NOT the same as CLOUDFLARE_R2_KEY/SECRET, which are
+#                           S3-compat data plane keys used by the orchestrator
+#                           to upload artifacts. The deploy plane needs its own
+#                           bearer token.)
+#   CLOUDFLARE_ACCOUNT_ID — your Cloudflare account ID (32-hex string).
+#
+# After the first successful run:
+#   - Worker is published at agent-platform-distributor.<account>.workers.dev
+#   - Pages project "agent-platform-admin" hosts the SPA
+#   - R2 buckets agent-platform-artifacts{,-preview} exist
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/cloudflare/**"
+      - "src/admin/**"
+      - ".github/workflows/deploy-cloudflare.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to deploy"
+        required: true
+        default: "all"
+        type: choice
+        options: [all, buckets, worker, pages]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-cloudflare
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  WORKER_BUCKET: agent-platform-artifacts
+  PREVIEW_BUCKET: agent-platform-artifacts-preview
+  PAGES_PROJECT: agent-platform-admin
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required secrets are set
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=("CLOUDFLARE_API_TOKEN")
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=("CLOUDFLARE_ACCOUNT_ID")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            echo "Add them under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "Secrets present."
+
+  buckets:
+    needs: preflight
+    if: github.event_name == 'push' || github.event.inputs.target == 'all' || github.event.inputs.target == 'buckets'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+
+      - name: Install wrangler
+        run: npm install -g wrangler@3
+
+      - name: Create R2 buckets idempotently
+        run: |
+          set -euo pipefail
+          for b in "$WORKER_BUCKET" "$PREVIEW_BUCKET"; do
+            if wrangler r2 bucket list 2>/dev/null | grep -qE "(^|[[:space:]])${b}([[:space:]]|$)"; then
+              echo "✓ bucket exists: ${b}"
+            else
+              echo "→ creating bucket: ${b}"
+              wrangler r2 bucket create "${b}"
+            fi
+          done
+
+  worker:
+    needs: [preflight, buckets]
+    if: always() && needs.preflight.result == 'success' && (github.event_name == 'push' || github.event.inputs.target == 'all' || github.event.inputs.target == 'worker')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+
+      - name: Install wrangler
+        run: npm install -g wrangler@3
+
+      - name: Validate worker.js syntax
+        run: node --check src/cloudflare/worker.js
+
+      - name: Deploy Worker
+        working-directory: src/cloudflare
+        run: wrangler deploy
+
+      - name: Smoke test the deployed worker
+        run: |
+          set -euo pipefail
+          # Resolve the workers.dev subdomain via the Cloudflare API.
+          # The subdomain is account-wide, not per-worker.
+          subdomain=$(curl -fsS \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain" \
+            | python -c "import sys,json; d=json.load(sys.stdin); print(d['result']['subdomain'])")
+
+          if [ -z "${subdomain}" ]; then
+            echo "::warning::Could not resolve workers.dev subdomain. Skipping smoke test."
+            exit 0
+          fi
+
+          url="https://agent-platform-distributor.${subdomain}.workers.dev/news/index.json"
+          echo "Smoke test URL: ${url}"
+
+          # The bucket may be empty on first deploy — accept either a JSON
+          # response (objects array possibly empty) or a 404 if the bucket
+          # itself does not yet exist.
+          http_code=$(curl -sS -o /tmp/smoke.out -w "%{http_code}" "${url}" || echo "000")
+          echo "HTTP ${http_code}"
+          cat /tmp/smoke.out
+          echo ""
+
+          case "${http_code}" in
+            200|404) echo "✓ worker reachable" ;;
+            *) echo "::error::Worker smoke test failed: HTTP ${http_code}"; exit 1 ;;
+          esac
+
+          # Persist the resolved URL to the job summary so the next workflow
+          # (or the user) can find it without manual lookup.
+          echo "DISTRIBUTOR_URL=https://agent-platform-distributor.${subdomain}.workers.dev" >> "$GITHUB_ENV"
+          {
+            echo "## Worker deployed"
+            echo ""
+            echo "**Distributor URL:** \`https://agent-platform-distributor.${subdomain}.workers.dev\`"
+            echo ""
+            echo "Paste this into the Admin SPA's *Distributor URL* field after the next pipeline run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  pages:
+    needs: preflight
+    if: always() && needs.preflight.result == 'success' && (github.event_name == 'push' || github.event.inputs.target == 'all' || github.event.inputs.target == 'pages')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+
+      - name: Install wrangler
+        run: npm install -g wrangler@3
+
+      - name: Deploy Admin SPA to Cloudflare Pages
+        run: |
+          set -euo pipefail
+          # `wrangler pages deploy` creates the project on first run if it does
+          # not yet exist. --branch main marks this as the production deployment.
+          wrangler pages deploy src/admin \
+            --project-name "${PAGES_PROJECT}" \
+            --branch main \
+            --commit-dirty=true

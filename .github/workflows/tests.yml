@@ -1,0 +1,58 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest tests/ -v --tb=short
+
+      - name: Validate JSON schemas against config files
+        run: |
+          python - <<'PY'
+          import json, yaml, jsonschema
+          jobs_schema = json.load(open("config/jobs.schema.json"))
+          pipe_schema = json.load(open("config/pipeline.schema.json"))
+          jobs = yaml.safe_load(open("config/jobs.yml"))
+          jsonschema.validate(jobs, jobs_schema)
+          for j in jobs["jobs"]:
+              pipe = yaml.safe_load(open(j["pipeline"]))
+              jsonschema.validate(pipe, pipe_schema)
+          print("OK: schemas valid")
+          PY
+
+      - name: Validate JS files
+        run: |
+          for f in src/cloudflare/worker.js src/admin/app.js client/hta/local_logic.js; do
+            node --check "$f" && echo "OK: $f"
+          done

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Platform — Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Agent Platform</h1>
+    <nav>
+      <button data-view="runs" class="nav active">Runs</button>
+      <button data-view="stages" class="nav">Stages</button>
+      <button data-view="cost" class="nav">Cost</button>
+      <button data-view="artifacts" class="nav">Artifacts</button>
+    </nav>
+    <div class="config">
+      <label>Distributor URL
+        <input id="distributor-url" type="url" placeholder="https://artifacts.example.invalid" />
+      </label>
+      <label>App
+        <select id="app-select"><option value="news">news</option></select>
+      </label>
+      <button id="refresh">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-runs" class="view active">
+      <h2>Job Runs</h2>
+      <div class="filters">
+        <label>Status
+          <select id="filter-status">
+            <option value="">(all)</option>
+            <option>success</option>
+            <option>failed</option>
+            <option>running</option>
+          </select>
+        </label>
+        <label>Since
+          <input id="filter-since" type="date" />
+        </label>
+      </div>
+      <table id="runs-table">
+        <thead><tr>
+          <th>job_run_id</th><th>job</th><th>status</th>
+          <th>started</th><th>duration</th><th>cost</th><th>stages</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty">Load data by pointing the Distributor URL at your Worker deployment.</p>
+    </section>
+
+    <section id="view-stages" class="view">
+      <h2>Stage Runs</h2>
+      <table id="stages-table">
+        <thead><tr>
+          <th>job_run_id</th><th>stage</th><th>use</th><th>status</th>
+          <th>attempt</th><th>duration</th><th>error</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section id="view-cost" class="view">
+      <h2>LLM Cost Tracking</h2>
+      <div class="cost-summary">
+        <div class="stat"><span class="label">Total (today)</span><span id="cost-today">—</span></div>
+        <div class="stat"><span class="label">Total (7d)</span><span id="cost-7d">—</span></div>
+        <div class="stat"><span class="label">Total (30d)</span><span id="cost-30d">—</span></div>
+      </div>
+      <table id="cost-table">
+        <thead><tr>
+          <th>model</th><th>prompt tok</th><th>completion tok</th><th>USD</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section id="view-artifacts" class="view">
+      <h2>R2 Artifacts</h2>
+      <table id="artifacts-table">
+        <thead><tr>
+          <th>key</th><th>size</th><th>uploaded</th><th>etag</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <footer><small>agent-platform admin — static SPA (no server)</small></footer>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

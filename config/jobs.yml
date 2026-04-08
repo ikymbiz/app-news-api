@@ -1,0 +1,52 @@
+version: "1.0"
+
+defaults:
+  timeout_seconds: 3600
+  retry:
+    max: 2
+    backoff: exponential
+    initial_delay_seconds: 30
+    max_delay_seconds: 1800
+    retry_on: [transient, rate_limit, timeout]
+
+jobs:
+  - id: news-daily
+    description: 毎日 07:30 JST(22:30 UTC)にニュースリファレンス実装を実行
+    app: news
+    pipeline: src/apps/news/pipeline.yml
+    enabled: true
+    trigger:
+      type: schedule
+      cron: "30 22 * * *"
+      timezone: UTC
+    timeout_seconds: 5400
+    retry:
+      max: 2
+      backoff: exponential
+      initial_delay_seconds: 60
+      max_delay_seconds: 1800
+      retry_on: [transient, rate_limit, timeout]
+    env:
+      GEMINI_API_KEY: secrets.GEMINI_API_KEY
+      OPENAI_API_KEY: secrets.OPENAI_API_KEY
+      CLOUDFLARE_R2_ACCOUNT: secrets.CLOUDFLARE_R2_ACCOUNT
+      CLOUDFLARE_R2_KEY: secrets.CLOUDFLARE_R2_KEY
+      CLOUDFLARE_R2_SECRET: secrets.CLOUDFLARE_R2_SECRET
+      FIREBASE_SERVICE_ACCOUNT: secrets.FIREBASE_SERVICE_ACCOUNT
+      AGENT_USER_CONTEXT: secrets.AGENT_USER_CONTEXT
+    concurrency:
+      group: news-daily
+      cancel_in_progress: false
+
+  - id: news-manual
+    description: 手動トリガー用ジョブ(GitHub Actions workflow_dispatch 経由)
+    app: news
+    pipeline: src/apps/news/pipeline.yml
+    enabled: true
+    trigger:
+      type: manual
+    timeout_seconds: 5400
+    retry:
+      max: 1
+      backoff: exponential
+      initial_delay_seconds: 30
